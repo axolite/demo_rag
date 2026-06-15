@@ -1,0 +1,54 @@
+.. _`nrfx`: https://github.com/NordicSemiconductor/nrfx/
+
+.. ### Links to Infocenter
+
+.. _`AT Commands Reference Guide`: https://infocenter.nordicsemi.com/topic/ref_at_commands/REF/at_commands/intro.html
+
+.. _`Credential storage management %CMNG`: https://infocenter.nordicsemi.com/topic/ref_at_commands/REF/at_commands/mob_termination_ctrl_status/cmng.html
+
+.. _`LTE Link Monitor`: https://infocenter.nordicsemi.com/topic/ug_link_monitor/UG/link_monitor/lm_certificate_manager.html
+
+.. _`nRF IEEE 802.15.4 radio driver documentation`: https://infocenter.nordicsemi.com/topic/15.4_radio_driver_v2.0.0-1.prealpha/index.html
+
+.. _`Infocenter`: https://infocenter.nordicsemi.com/index.jsp
+
+.. _`Thread CIDs for nRF5340`: https://infocenter.nordicsemi.com/topic/comp_matrix_nrf5340/COMP/nrf5340/nrf5340_thread_cids.html
+.. _`Thread CIDs for nRF52840`: https://infocenter.nordicsemi.com/topic/comp_matrix_nrf52840/COMP/nrf52840/nrf52840_thread_cids.html
+.. _`Thread CIDs for nRF52833`: https://infocenter.nordicsemi.com/topic/comp_matrix_nrf52833/COMP/nrf52833/nrf52833_thread_cids.html
+
+.. ### Links to Nordic pages
+
+.. _`nRF9160 modem firmware zip file`: https://www.nordicsemi.com/Products/Low-power-cellular-IoT/nRF9160/Download#0B34B59935AF4AFCB7AB93E9646C1F53
+
+.. _`nRF9160 modem TLS cipher suites`: https://www.nordicsemi.com/Products/Low-power-cellular-IoT/nRF9160/Download#infotabs
+
+.. ### Other links
+
+.. _`Beej's Guide to Network Programming`: https://beej.us/guide/bgnet/
+
+.. _`ZBOSS API documentation`:
+.. _`ZBOSS stack release notes`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/zboss/index.html
+.. _`certification policy`: https://zigbeealliance.org/wp-content/uploads/2021/04/07-4842-13-Zigbee-certification-policy.pdf
+.. _`Zigbee Compliant Platforms page`: https://zigbeealliance.org/classic-platform-search/#zcp/?view_197_search=nRF%20Connect%20SDK
+
+.. _`mbed TLS backend`: https://tls.mbed.org/
+
+.. _`article on reducing mbed TLS memory and storage footprint`: https://tls.mbed.org/kb/how-to/reduce-mbedtls-memory-and-storage-footprint
+
+.. _`Arm mbed TLS project`: https://github.com/ARMmbed/mbedtls
+
+.. _`Global navigation satellite system (GNSS)`: https://en.wikipedia.org/wiki/Satellite_navigation
+
+.. _`NMEA`: https://www.gpsworld.com/what-exactly-is-gps-nmea-data/
+
+.. _`A-GPS`: https://en.wikipedia.org/wiki/Assisted_GPS
+
+.. _`TinyCBOR`: https://github.com/zephyrproject-rtos/tinycbor
+
+.. _`OpenAMP`: https://github.com/OpenAMP/open-amp/
+
+.. _`Zephyr`: https://www.zephyrproject.org
+
+.. _`NMEA report sample`: http://aprs.gids.nl/nmea/#gsa
+
+.. _`IANA`: https://en.wikipedia.org/wiki/Internet_Assigned_Numbers_Authority
