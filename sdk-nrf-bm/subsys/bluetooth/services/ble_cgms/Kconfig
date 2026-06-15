@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menuconfig BLE_CGMS
+	bool "Continuous glucose monitoring service [EXPERIMENTAL]"
+	depends on SOFTDEVICE_PERIPHERAL
+	depends on NRF_SDH_BLE
+	depends on BLE_GATT_QUEUE
+	depends on BLE_RACP
+	select EXPERIMENTAL
+
+if BLE_CGMS
+
+config BLE_CGMS_DB_RECORDS_MAX
+	int "Number of records that can be stored in the database"
+	default 100
+
+module=BLE_CGMS
+module-str=BLE CGMS
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif

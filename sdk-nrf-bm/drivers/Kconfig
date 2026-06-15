@@ -1,0 +1,14 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menu "Device Drivers"
+
+# zephyr-keep-sorted-start
+rsource "console/Kconfig"
+rsource "flash/Kconfig"
+rsource "bm_lpuarte/Kconfig"
+# zephyr-keep-sorted-stop
+
+endmenu

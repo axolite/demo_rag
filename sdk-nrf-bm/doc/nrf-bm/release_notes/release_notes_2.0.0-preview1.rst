@@ -1,0 +1,231 @@
+:orphan:
+
+.. _nrf_bm_release_notes_200-preview1:
+
+Changelog for |BMlong| v2.0.0-preview1
+######################################
+
+This changelog reflects the most relevant changes from the latest official release.
+
+Highlights
+**********
+
+The following are the major changes introduced by the v2.0.0-preview1 tag:
+
+* Introduced the new S115 and S145 SoftDevices: v10.0.0-1.prototype.
+* Added experimental support for the following new boards:
+
+   * PCA10188 (`nRF54LV10 DK`_)
+   * PCA10184 (`nRF54LM20 DK`_)
+   * PCA10214 (`nRF54LS05 DK`_)
+
+  Support for the new boards is added in the :ref:`ble_hrs_sample` and :ref:`ble_nus_sample` samples.
+
+Changelog
+*********
+
+The following sections provide detailed lists of changes by component.
+
+SDK installation
+================
+
+* Updated the steps to install prerequisites in the :ref:`install_nrf_bm` page.
+  Installation of the recommended version of SEGGER J-Link is now handled by `nRF Connect for Desktop`_.
+
+S115 SoftDevice
+===============
+
+* Updated the SoftDevice to v10.0.0-1.prototype.
+  See the SoftDevice release notes for details.
+
+S145 SoftDevice
+===============
+
+* Updated the SoftDevice to v10.0.0-1.prototype.
+  See the SoftDevice release notes for details.
+
+SoftDevice Handler
+==================
+
+* Updated the :c:macro:`NRF_SDH_STATE_EVT_OBSERVER` and :c:macro:`NRF_SDH_STACK_EVT_OBSERVER` macros to not declare the handler prototype.
+
+Boards
+======
+
+* Added experimental support for the following boards:
+
+   * PCA10188 (`nRF54LV10 DK`_)
+   * PCA10184 (`nRF54LM20 DK`_)
+   * PCA10214 (`nRF54LS05 DK`_)
+
+* Adjusted SRAM sizes for the ``bm_nrf54l15dk`` board target to not overlap with VPR context.
+* Adjusted the board memory layout for all boards to align with the new SoftDevice.
+
+Build system
+============
+
+* Updated the Kconfig dependencies, including those for drivers, libraries, and Bluetooth LE services.
+
+DFU
+===
+
+No changes since the latest nRF Connect SDK Bare Metal release.
+
+Interrupts
+==========
+
+No changes since the latest nRF Connect SDK Bare Metal release.
+
+Logging
+=======
+
+No changes since the latest nRF Connect SDK Bare Metal release.
+
+Drivers
+=======
+
+* :ref:`driver_lpuarte`:
+
+   * Updated to use the :ref:`lib_bm_gpiote` library.
+   * Removed the ``gpiote_inst`` and ``gpiote_inst_num`` members from the :c:struct:`bm_lpuarte_config` structure.
+
+Libraries
+=========
+
+* Added the :ref:`lib_bm_gpiote` library.
+
+* :ref:`lib_peer_manager` library:
+
+   * Removed the ``CONFIG_MBEDTLS_PSA_STATIC_KEY_SLOT_BUFFER_SIZE`` Kconfig option.
+     The PSA Crypto core can deduce the key slot buffer size based on the keys enabled in the build, so there is no need to define the size manually.
+
+* :ref:`lib_bm_buttons` library:
+
+   * Updated to use the :ref:`lib_bm_gpiote` library.
+
+* :ref:`lib_ble_adv`:
+
+   * Added the ``const`` keyword to the configuration structure parameter of the :c:func:`ble_adv_init` function to reflect that the function only reads from the configuration and does not modify it.
+
+   * Updated:
+
+      * The :kconfig:option:`CONFIG_BLE_ADV_EXTENDED_ADVERTISING` Kconfig option to be disabled by default and dependent on the new :kconfig:option:`CONFIG_SOFTDEVICE_EXTENDED_ADVERTISING` Kconfig option.
+      * The :kconfig:option:`CONFIG_BLE_ADV_DIRECTED_ADVERTISING` Kconfig option to be disabled by default.
+
+   * Fixed:
+
+      * An issue causing fast advertising with allow list to incorrectly send event :c:enumerator:`BLE_ADV_EVT_FAST` when it should have sent event :c:enumerator:`BLE_ADV_EVT_FAST_ALLOW_LIST`.
+      * An issue causing slow advertising with allow list to incorrectly send event :c:enumerator:`BLE_ADV_EVT_SLOW` when it should have sent event :c:enumerator:`BLE_ADV_EVT_SLOW_ALLOW_LIST`.
+
+* :ref:`lib_ble_scan`:
+
+   * Updated functions to use the ``uint32_t`` type instead of ``int`` when returning nrf_errors.
+
+Bluetooth LE Services
+---------------------
+
+* Renamed the Bluetooth: Heart Rate Service Central (``ble_hrs_central``) to the :ref:`lib_ble_service_hrs_client` sample.
+* Updated all services to return errors from the SoftDevice directly.
+* Removed the BMS authorization code Kconfig options (:kconfig:option:`CONFIG_BLE_BMS_AUTHORIZATION_CODE` and :kconfig:option:`CONFIG_BLE_BMS_USE_AUTHORIZATION_CODE`) from the service library, as they are only used by the BMS sample.
+
+Libraries for NFC
+-----------------
+
+* The NFC subsystem code has been migrated to |BMshort| and does not reuse code form |NCS| anymore.
+  The NFC related Kconfig options provided by |BMshort| have the ``BM_NFC_`` prefix.
+  The following list shows mapping from |NCS| Kconfig options to |BMshort| Kconfig options:
+
+  * ``CONFIG_NFCT_IRQ_PRIORITY`` --> :kconfig:option:`CONFIG_BM_NFCT_IRQ_PRIORITY`
+  * ``CONFIG_NFC_PLATFORM_LOG_LEVEL*`` --> :kconfig:option:`CONFIG_BM_NFC_PLATFORM_LOG_LEVEL*`
+  * ``CONFIG_NFC_NDEF*`` --> :kconfig:option:`CONFIG_BM_NFC_NDEF*`
+  * ``CONFIG_NFC_T4T_NDEF_FILE`` --> :kconfig:option:`CONFIG_BM_NFC_T4T_NDEF_FILE`
+
+  Use ``#include <bm/nfc/..>`` to include NFC related header files provided by |BMshort| instead of ``#include <nfc/...>``.
+
+* Added NFC libraries for NFC Connection Handover and Bluetooth LE Out-of-Band (OOB) pairing.
+
+Samples
+=======
+
+* Updated the prefix for sample Kconfig options from ``APP`` to ``SAMPLE``.
+
+* Removed the battery measurement simulation from the following samples:
+
+   * :ref:`ble_cgms_sample`
+   * :ref:`ble_hids_mouse_sample`
+   * :ref:`ble_hids_keyboard_sample`
+
+* Aligned LED and button behavior across samples.
+
+Bluetooth LE samples
+--------------------
+
+* Added the :ref:`peripheral_nfc_pairing_sample`.
+
+* :ref:`ble_bms_sample`:
+
+   * Added sample-specific Kconfig options for the BMS authorization code by moving them from the service library scope and renaming them from ``CONFIG_BLE_BMS_AUTHORIZATION_CODE`` and ``CONFIG_BLE_BMS_USE_AUTHORIZATION_CODE`` to :kconfig:option:`CONFIG_APP_BLE_BMS_AUTHORIZATION_CODE` and :kconfig:option:`CONFIG_APP_BLE_BMS_USE_AUTHORIZATION_CODE`.
+
+* :ref:`ble_hrs_sample` sample:
+
+   * Added support for the new board targets:
+
+     * PCA10188 (`nRF54LV10 DK`_)
+     * PCA10184 (`nRF54LM20 DK`_)
+     * PCA10214 (`nRF54LS05 DK`_)
+
+* :ref:`ble_hids_keyboard_sample`:
+
+   * Added support for boot mode.
+
+* :ref:`ble_hids_mouse_sample`:
+
+   * Fixed an issue where the sample did not enter or exit boot mode properly based on the HID events.
+
+* :ref:`ble_nus_sample` sample:
+
+   * Added support for the new board targets:
+
+     * PCA10188 (`nRF54LV10 DK`_)
+     * PCA10184 (`nRF54LM20 DK`_)
+     * PCA10214 (`nRF54LS05 DK`_)
+
+   * Updated to align with changes to the :ref:`driver_lpuarte` driver.
+
+* :ref:`ble_pwr_profiling_sample`:
+
+   * Updated to use a dedicated variable to hold the service attribute handle instead of incorrectly using the connection handle variable for this during service initialization.
+
+NFC samples
+-----------
+
+* Updated to use ``CONFIG_BM_NFC_*`` Kconfig options provided by |BMshort| instead of ``CONFIG_NFC_*`` options provided by |NCS|.
+  Use ``#include <bm/nfc/...>`` headers provided by |BMshort| instead of ``#include <nfc/...>`` headers from |NCS|.
+
+Peripheral samples
+------------------
+
+* :ref:`bm_lpuarte_sample` sample:
+
+  * Updated to align with changes to the :ref:`driver_lpuarte` driver.
+
+DFU samples
+-----------
+
+No changes since the latest nRF Connect SDK Bare Metal release.
+
+Subsystem samples
+-----------------
+
+* Added the :ref:`shell_bm_uarte_sample` sample.
+
+Known issues and limitations
+============================
+
+No changes since the latest nRF Connect SDK Bare Metal release.
+
+Documentation
+=============
+
+* Improved sample documentation with clearer, more descriptive user guides, including updated explanations of configuration options, hardware connections, and testing procedures.
+* Added the :ref:`board_memory_layouts` section, which documents RRAM and SRAM partition layouts for supported boards.

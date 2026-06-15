@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menu "Logging"
+
+if LOG
+
+if !LOG_MODE_MINIMAL
+
+if !LOG_FRONTEND_ONLY
+
+rsource "backends/Kconfig"
+
+endif # !LOG_FRONTEND_ONLY
+
+endif # !LOG_MODE_MINIMAL
+
+endif # LOG
+
+endmenu

@@ -1,0 +1,19 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menuconfig BLE_BMS
+	bool "Bond management service [EXPERIMENTAL]"
+	select EXPERIMENTAL
+	depends on SOFTDEVICE_PERIPHERAL
+	depends on NRF_SDH_BLE
+	depends on BLE_QWR
+
+if BLE_BMS
+
+module=BLE_BMS
+module-str=BLE_BMS
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif

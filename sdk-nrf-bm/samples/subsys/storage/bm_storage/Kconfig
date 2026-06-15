@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "Bare Metal Storage sample"
+
+module=SAMPLE_BM_STORAGE
+module-str=Bare Metal Storage Sample
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu # "Bare Metal Storage sample"
+
+source "Kconfig.zephyr"

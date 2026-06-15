@@ -1,0 +1,162 @@
+#
+# Copyright (c) 2024 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menuconfig BLE_CONN_PARAMS
+	bool "Bluetooth LE Connection Parameters"
+	depends on SOFTDEVICE
+	depends on NRF_SDH
+	depends on NRF_SDH_BLE
+
+if BLE_CONN_PARAMS
+
+menuconfig BLE_CONN_PARAMS_AUTO_GAP_CONN_PARAM_UPDATE
+	bool "Handle GAP connection parameter updates"
+	default y
+
+if BLE_CONN_PARAMS_AUTO_GAP_CONN_PARAM_UPDATE
+
+config BLE_CONN_PARAMS_MIN_CONN_INTERVAL
+	int "Minimum connection interval (1.25 ms units)"
+	range 6 3200
+	default 6
+	help
+	  Minimum connection interval in 1.25 ms units.
+	  Min 7.5 ms, Max 4 sec.
+
+config BLE_CONN_PARAMS_MAX_CONN_INTERVAL
+	int "Maximum connection interval (1.25 ms units)"
+	range BLE_CONN_PARAMS_MIN_CONN_INTERVAL 3200
+	default 256
+	help
+	  Maximum connection interval in 1.25 ms units.
+	  Min 7.5 ms, Max 4 sec.
+
+config BLE_CONN_PARAMS_PERIPHERAL_LATENCY
+	int "Peripheral latency"
+	range 0 499
+	default 0
+	help
+	  Number of connection events that peripheral is allowed to skip.
+
+config BLE_CONN_PARAMS_SUP_TIMEOUT
+	int "Connection supervision timeout (10 ms units)"
+	range 10 3200
+	default 100
+	help
+	  Connection supervision timeout in 10 ms units.
+	  Min 100 ms, Max 32 sec.
+
+config BLE_CONN_PARAMS_MAX_PERIPHERAL_LATENCY_DEVIATION
+	int "Maximum peripheral latency deviation"
+	range 0 499
+	default 6
+	help
+	  How much the peripheral latency can deviate from the desired value.
+
+config BLE_CONN_PARAMS_MAX_SUP_TIMEOUT_DEVIATION
+	int "Maximum supervision timeout deviation (10 ms units)"
+	range 0 3190
+	default 400
+	help
+	  How much the connection supervision timeout can deviate from the desired value.
+
+config BLE_CONN_PARAMS_NEGOTIATION_RETRIES
+	int "Number of attempts to negotiate parameters"
+	default 2
+	help
+	  Maximum number of attempts to negotiate connection parameters.
+
+config BLE_CONN_PARAMS_DISCONNECT_ON_FAILURE
+	bool "Disconnect upon failure to negotiate configured parameters"
+
+endif # BLE_CONN_PARAMS_AUTO_GAP_CONN_PARAM_UPDATE
+
+config BLE_CONN_PARAMS_AUTO_ATT_MTU
+	bool "Handle ATT MTU exchanges"
+	default y
+
+if BLE_CONN_PARAMS_AUTO_ATT_MTU
+
+# Define a hidden KConfig for this module
+config BLE_CONN_PARAMS_ATT_MTU
+	int
+	default NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+
+# Show the SDH Kconfig entry
+config NRF_SDH_BLE_GATT_MAX_MTU_SIZE
+	int "ATT MTU"
+
+config BLE_CONN_PARAMS_INITIATE_ATT_MTU_EXCHANGE
+	bool "Initiate ATT MTU exchange on connection" if BLE_CONN_PARAMS_ATT_MTU != 23
+
+endif # BLE_CONN_PARAMS_AUTO_ATT_MTU
+
+config BLE_CONN_PARAMS_AUTO_DATA_LENGTH
+	bool "Handle data length updates"
+	default y
+	depends on SOFTDEVICE_DATA_LENGTH_UPDATE
+
+if BLE_CONN_PARAMS_AUTO_DATA_LENGTH
+
+config BLE_CONN_PARAMS_DATA_LENGTH_TX
+	int "Data length TX"
+	range 27 251
+	default 27
+	help
+	  This option sets an application defined upper limit on the negotiated TX data length,
+	  as seen from the device.
+	  Note that the SoftDevice ATT MTU configuration places limitations on the maximum
+	  negotiable data length. This is due to memory efficiency. For instance, to use the
+	  definitive max data length of 251, the ATT MTU needs to be configured to at least 247.
+
+config BLE_CONN_PARAMS_DATA_LENGTH_RX
+	int "Data length RX"
+	range 27 251
+	default 27
+	help
+	  This option sets an application defined upper limit on the negotiated RX data length,
+	  as seen from the device.
+	  Note that the SoftDevice ATT MTU configuration places limitations on the maximum
+	  negotiable data length. This is due to memory efficiency. For instance, to use the
+	  definitive max data length of 251, the ATT MTU needs to be configured to at least 247.
+
+config BLE_CONN_PARAMS_INITIATE_DATA_LENGTH_UPDATE
+	bool "Initiate data length update on connection" if BLE_CONN_PARAMS_DATA_LENGTH_TX != 27 || \
+							    BLE_CONN_PARAMS_DATA_LENGTH_RX != 27
+
+endif # BLE_CONN_PARAMS_AUTO_DATA_LENGTH
+
+config BLE_CONN_PARAMS_AUTO_PHY_UPDATE
+	bool "Handle PHY mode updates"
+	default y
+if BLE_CONN_PARAMS_AUTO_PHY_UPDATE
+
+config BLE_CONN_PARAMS_PHY_AUTO
+	bool "Automatic PHY mode selection"
+	depends on !BLE_CONN_PARAMS_PHY_1MBPS && \
+		   !BLE_CONN_PARAMS_PHY_2MBPS && \
+		   !BLE_CONN_PARAMS_PHY_CODED
+	default y
+
+config BLE_CONN_PARAMS_PHY_1MBPS
+	bool "Prefer 1 Mbps PHY"
+
+config BLE_CONN_PARAMS_PHY_2MBPS
+	bool "Prefer 2 Mbps PHY"
+
+config BLE_CONN_PARAMS_PHY_CODED
+	bool "Prefer Coded PHY"
+
+config BLE_CONN_PARAMS_INITIATE_PHY_UPDATE
+	bool "Initiate PHY mode update on connection"
+	depends on BLE_CONN_PARAMS_AUTO_PHY_UPDATE
+
+endif # BLE_CONN_PARAMS_AUTO_PHY_UPDATE
+
+module=BLE_CONN_PARAMS
+module-str=BLE Connection Parameters
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif # BLE_CONN_PARAMS

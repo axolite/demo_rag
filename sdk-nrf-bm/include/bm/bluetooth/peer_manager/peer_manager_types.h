@@ -1,0 +1,517 @@
+/*
+ * Copyright (c) 2015-2025 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+/**
+ * @file peer_manager_types.h
+ *
+ * @addtogroup peer_manager
+ * @{
+ */
+
+#ifndef PEER_MANAGER_TYPES_H__
+#define PEER_MANAGER_TYPES_H__
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <ble_gap.h>
+#include <ble_hci.h>
+#include <bm/bluetooth/ble_gatt_db.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Invalid value for Peer ID. */
+#define PM_PEER_ID_INVALID 0xFFFF
+/** @brief Invalid value for store token. */
+#define PM_STORE_TOKEN_INVALID 0
+/** @brief The number of available peer IDs. */
+#define PM_PEER_ID_N_AVAILABLE_IDS 256
+/** @brief The static-length part of the local GATT data struct. */
+#define PM_LOCAL_DB_LEN_OVERHEAD_BYTES offsetof(struct pm_peer_data_local_gatt_db, data)
+/**
+ * @brief The base for Peer Manager defined errors. See @ref PM_SEC_ERRORS.
+ */
+#define PM_CONN_SEC_ERROR_BASE 0x1000
+
+/**
+ * @defgroup PM_SEC_ERRORS Peer Manager defined security errors
+ *
+ * @details The first 256 numbers, from PM_CONN_SEC_ERROR_BASE to (PM_CONN_SEC_ERROR_BASE + 0xFF),
+ *          correspond to the status codes in @ref BLE_HCI_STATUS_CODES.
+ * @{
+ */
+/**
+ * @brief Encryption failed because the peripheral has lost the LTK for this
+ *        bond. See also @ref BLE_HCI_STATUS_CODE_PIN_OR_KEY_MISSING and Table 3.7
+ *        ("Pairing Failed Reason Codes") in the Bluetooth Core Specification 4.2,
+ *        section 3.H.3.5.5 (@linkBLEcore).
+ */
+#define PM_CONN_SEC_ERROR_PIN_OR_KEY_MISSING (PM_CONN_SEC_ERROR_BASE + 0x06)
+/**
+ * @brief Encryption ended with disconnection because of mismatching keys or a
+ *        stray packet during a procedure. See the SoftDevice GAP Message Sequence Charts
+ *        on encryption (@linkBLEMSCgap), the Bluetooth Core Specification 4.2,
+ *        sections 6.B.5.1.3.1 and 3.H.3.5.5 (@linkBLEcore), and
+ *        @ref BLE_HCI_CONN_TERMINATED_DUE_TO_MIC_FAILURE.
+ */
+#define PM_CONN_SEC_ERROR_MIC_FAILURE (PM_CONN_SEC_ERROR_BASE + 0x3D)
+/**
+ * @brief Pairing or encryption did not finish before
+ *        the link disconnected for an unrelated reason.
+ */
+#define PM_CONN_SEC_ERROR_DISCONNECT (PM_CONN_SEC_ERROR_BASE + 0x100)
+/**
+ * @brief Pairing/bonding could not start because an SMP time-out has already
+ *        happened on this link. This means that no more pairing or bonding can happen on
+ *        this link. To be able to pair or bond, the link must be disconnected and then
+ *        reconnected. See Bluetooth Core Specification 4.2 section 3.H.3.4 (@linkBLEcore).
+ */
+#define PM_CONN_SEC_ERROR_SMP_TIMEOUT (PM_CONN_SEC_ERROR_BASE + 0x101)
+/** @} */
+
+/**
+ * @defgroup PM_PEER_ID_VERSIONS All versions of Peer IDs.
+ * @brief The data ID for each iteration of the data formats in non-volatile storage.
+ * @details Each time the format (in non-volatile storage) of a piece of peer data changes, the data
+ *          ID will also be updated. This list of defines is a record of each data ID that has ever
+ *          existed, and code that caters to legacy formats can find the relevant IDs here.
+ * @{
+ */
+/** @brief The smallest data ID. */
+#define PM_PEER_DATA_ID_FIRST_VX 0
+/** @brief The data ID of the first version of bonding data. */
+#define PM_PEER_DATA_ID_BONDING_V1 0
+/** @brief The data ID of the second version of bonding data. */
+#define PM_PEER_DATA_ID_BONDING_V2 7
+/** @brief The data ID of the first version of the service changed pending flag. */
+#define PM_PEER_DATA_ID_SERVICE_CHANGED_PENDING_V1 1
+/** @brief The data ID of the first version of local GATT data. */
+#define PM_PEER_DATA_ID_GATT_LOCAL_V1 2
+/** @brief The data ID of the second version of local GATT data. */
+#define PM_PEER_DATA_ID_GATT_LOCAL_V2 8
+/** @brief The data ID of the first version of remote GATT data. */
+#define PM_PEER_DATA_ID_GATT_REMOTE_V1 3
+/** @brief The data ID of the first version of application data. */
+#define PM_PEER_DATA_ID_APPLICATION_V1 4
+/** @brief The data ID of the second version of remote GATT data. */
+#define PM_PEER_DATA_ID_GATT_REMOTE_V2 5
+/** @brief The data ID of the first version of the rank. */
+#define PM_PEER_DATA_ID_PEER_RANK_V1 6
+/** @brief The data ID of the first version of central address resolution. */
+#define PM_PEER_DATA_ID_CENTRAL_ADDR_RES_V1 9
+/** @brief The data ID after the last valid one. */
+#define PM_PEER_DATA_ID_LAST_VX 10
+/** @brief A data ID guaranteed to be invalid. */
+#define PM_PEER_DATA_ID_INVALID_VX 0xFF
+/**@}*/
+
+/**
+ * @brief The different types of data associated with a peer.
+ */
+enum pm_peer_data_id {
+	/** @brief The smallest data ID. */
+	PM_PEER_DATA_ID_FIRST = PM_PEER_DATA_ID_FIRST_VX,
+	/** @brief The data ID for bonding data. Type: @ref pm_peer_data_bonding. */
+	PM_PEER_DATA_ID_BONDING = PM_PEER_DATA_ID_BONDING_V2,
+	/** @brief The data ID for service changed state. Type: bool. */
+	PM_PEER_DATA_ID_SERVICE_CHANGED_PENDING = PM_PEER_DATA_ID_SERVICE_CHANGED_PENDING_V1,
+	/**
+	 * @brief The data ID for local GATT data (sys attributes).
+	 * Type: @ref pm_peer_data_local_gatt_db.
+	 */
+	PM_PEER_DATA_ID_GATT_LOCAL = PM_PEER_DATA_ID_GATT_LOCAL_V2,
+	/** @brief The data ID for remote GATT data. Type: uint8_t array. */
+	PM_PEER_DATA_ID_GATT_REMOTE = PM_PEER_DATA_ID_GATT_REMOTE_V2,
+	/** @brief The data ID for peer rank. See @ref pm_peer_rank_highest. Type: uint32_t. */
+	PM_PEER_DATA_ID_PEER_RANK = PM_PEER_DATA_ID_PEER_RANK_V1,
+	/**
+	 * @brief The data ID for central address resolution. See @ref pm_peer_id_list.
+	 * Type: uint32_t.
+	 */
+	PM_PEER_DATA_ID_CENTRAL_ADDR_RES = PM_PEER_DATA_ID_CENTRAL_ADDR_RES_V1,
+	/** @brief The data ID for application data. Type: uint8_t array. */
+	PM_PEER_DATA_ID_APPLICATION = PM_PEER_DATA_ID_APPLICATION_V1,
+	/** @brief One more than the highest data ID. */
+	PM_PEER_DATA_ID_LAST = PM_PEER_DATA_ID_LAST_VX,
+	/** @brief A data ID guaranteed to be invalid. */
+	PM_PEER_DATA_ID_INVALID = PM_PEER_DATA_ID_INVALID_VX,
+};
+
+/** @brief Different procedures that can lead to an encrypted link. */
+enum pm_conn_sec_procedure {
+	/**
+	 * @brief Using an LTK that was shared during a previous bonding procedure to encrypt the
+	 * link.
+	 */
+	PM_CONN_SEC_PROCEDURE_ENCRYPTION,
+	/** @brief A pairing procedure, followed by a bonding procedure. */
+	PM_CONN_SEC_PROCEDURE_BONDING,
+	/** @brief A pairing procedure with no bonding. */
+	PM_CONN_SEC_PROCEDURE_PAIRING,
+};
+
+/** @brief Configuration of a security procedure. */
+struct pm_conn_sec_config {
+	/**
+	 * @brief Whether to allow the peer to pair if it wants to, but is already bonded.
+	 *        If this is false, the procedure is rejected, and no more events are sent.
+	 *        Default: false.
+	 */
+	bool allow_repairing;
+};
+
+/** @brief Data associated with a bond to a peer. */
+struct pm_peer_data_bonding {
+	/** @brief The Bluetooth LE role of the local device during bonding.
+	 *  See @ref BLE_GAP_ROLES.
+	 */
+	uint8_t own_role;
+	/** @brief The peer's Bluetooth address and identity resolution key (IRK). */
+	ble_gap_id_key_t peer_ble_id;
+	/** @brief The peer's long-term encryption key (LTK) and master ID. */
+	ble_gap_enc_key_t peer_ltk;
+	/**
+	 * @brief Locally generated long-term encryption key (LTK) and master ID, distributed to
+	 *        the peer.
+	 */
+	ble_gap_enc_key_t own_ltk;
+};
+
+/** @brief Data on a local GATT database. */
+struct pm_peer_data_local_gatt_db {
+	/** @brief Flags that describe the database attributes. */
+	uint32_t flags;
+	/** @brief Size of the attribute array. */
+	uint16_t len;
+	/** @brief Array to hold the database attributes. */
+	uint8_t data[1];
+};
+
+/** @brief Security status of a connection. */
+struct pm_conn_sec_status {
+	/** @brief The connection is active (not disconnected). */
+	uint8_t connected: 1;
+	/** @brief The communication on this link is encrypted. */
+	uint8_t encrypted: 1;
+	/**
+	 * @brief The encrypted communication is also protected against man-in-the-middle attacks.
+	 */
+	uint8_t mitm_protected: 1;
+	/** @brief The peer is bonded. */
+	uint8_t bonded: 1;
+	/** @brief The peer is paired using LESC. */
+	uint8_t lesc: 1;
+	/** @brief Reserved for future use. */
+	uint8_t reserved: 3;
+};
+
+/** @brief Types of events that can come from the @ref peer_manager module. */
+enum pm_evt_id {
+	/**
+	 * @brief A connected peer has been identified as one with which we have a bond.
+	 *        When performing bonding with a peer for the first time, this event will not be
+	 *        sent until a new connection is established with the peer. When we are central,
+	 *        this event is always sent when the Peer Manager receives the
+	 *        @ref BLE_GAP_EVT_CONNECTED event. When we are peripheral, this event might
+	 *        in rare cases arrive later.
+	 */
+	PM_EVT_BONDED_PEER_CONNECTED,
+	/**
+	 * @brief A new connection has been established. This event is a wrapper for
+	 *        @ref BLE_GAP_EVT_CONNECTED event and contains its parameters. Reply with
+	 *        @ref pm_conn_exclude before the event handler returns to exclude Bluetooth LE
+	 *        events targeting this connection from being handled by the Peer Manager.
+	 */
+	PM_EVT_CONN_CONFIG_REQ,
+	/**
+	 * @brief A security procedure has started on a link, initiated either locally or remotely.
+	 *        The security procedure is using the last parameters provided via
+	 *        @ref pm_sec_params_set. This event is always followed by either a
+	 *        @ref PM_EVT_CONN_SEC_SUCCEEDED or a @ref PM_EVT_CONN_SEC_FAILED event.
+	 *        This is an informational event; no action is needed for the procedure to proceed.
+	 */
+	PM_EVT_CONN_SEC_START,
+	/**
+	 * @brief A link has been encrypted, either as a result of a call to @ref pm_conn_secure or
+	 *        a result of an action by the peer. The event structure contains more information
+	 *        about the circumstances. This event might contain a peer ID with the
+	 *        value @ref PM_PEER_ID_INVALID, which means that the peer (central) used an
+	 *        address that could not be identified, but it used an encryption key (LTK) that
+	 *        is present in the database.
+	 */
+	PM_EVT_CONN_SEC_SUCCEEDED,
+	/**
+	 * @brief A pairing or encryption procedure has failed. In some cases, this means that
+	 *        security is not possible on this link (temporarily or permanently).
+	 *        How to handle this error depends on the application.
+	 */
+	PM_EVT_CONN_SEC_FAILED,
+	/**
+	 * @brief The peer (central) has requested pairing, but a bond already exists with
+	 *        that peer. Reply by calling @ref pm_conn_sec_config_reply before the
+	 *        event handler returns. If no reply is sent, a default is used.
+	 */
+	PM_EVT_CONN_SEC_CONFIG_REQ,
+	/**
+	 * @brief Security parameters (@ref ble_gap_sec_params_t) are needed for an ongoing
+	 *        security procedure. Reply with @ref pm_conn_sec_params_reply before the
+	 *        event handler returns. If no reply is sent, the parameters given in
+	 *        @ref pm_sec_params_set are used. If a peripheral connection, the central's
+	 *        sec_params will be available in the event.
+	 */
+	PM_EVT_CONN_SEC_PARAMS_REQ,
+	/**
+	 * @brief There is no more room for peer data in non-volatile storage.
+	 *        To solve this problem, delete data that is not needed anymore and run a
+	 *        garbage collection procedure in ZMS.
+	 */
+	PM_EVT_STORAGE_FULL,
+	/**
+	 * @brief An unrecoverable error happened inside Peer Manager. An operation failed with
+	 *        the provided error.
+	 */
+	PM_EVT_ERROR_UNEXPECTED,
+	/**
+	 * @brief A piece of peer data was stored, updated, or cleared in non-volatile storage.
+	 *        This event is sent for all successful changes to peer data, also those initiated
+	 *        internally in Peer Manager. To identify an operation, compare the store token
+	 *        in the event with the store token received during the initiating function call.
+	 *        Events from internally initiated changes might have invalid store tokens.
+	 */
+	PM_EVT_PEER_DATA_UPDATE_SUCCEEDED,
+	/**
+	 * @brief A piece of peer data could not be stored, updated, or cleared in non-volatile
+	 *        storage. This event is sent instead of @ref PM_EVT_PEER_DATA_UPDATE_SUCCEEDED
+	 *        for the failed operation.
+	 */
+	PM_EVT_PEER_DATA_UPDATE_FAILED,
+	/**
+	 * @brief A peer was cleared from non-volatile storage, for example because of a call to
+	 *        @ref pm_peer_delete succeeded. This event can also be sent as part of a call to
+	 *        @ref pm_peers_delete or internal cleanup.
+	 */
+	PM_EVT_PEER_DELETE_SUCCEEDED,
+	/**
+	 * @brief A peer could not be cleared from non-volatile storage. This event is sent
+	 *        instead of @ref PM_EVT_PEER_DELETE_SUCCEEDED for the failed operation.
+	 */
+	PM_EVT_PEER_DELETE_FAILED,
+	/**
+	 * @brief A call to @ref pm_peers_delete has completed successfully. The non-volatile
+	 *        storage now contains no peer data.
+	 */
+	PM_EVT_PEERS_DELETE_SUCCEEDED,
+	/**
+	 * @brief A call to @ref pm_peers_delete has failed, which means that at least one of
+	 *        the peers could not be deleted. Other peers might have been deleted, or might
+	 *        still be queued to be deleted. No more @ref PM_EVT_PEERS_DELETE_SUCCEEDED or
+	 *        @ref PM_EVT_PEERS_DELETE_FAILED events are sent until the next time
+	 *        @ref pm_peers_delete is called.
+	 */
+	PM_EVT_PEERS_DELETE_FAILED,
+	/**
+	 * @brief Local database values for a peer (taken from non-volatile storage) have been
+	 *        provided to the SoftDevice.
+	 */
+	PM_EVT_LOCAL_DB_CACHE_APPLIED,
+	/**
+	 * @brief Local database values for a peer (taken from non-volatile storage) were rejected
+	 *        by the SoftDevice, which means that either the database has changed or the user
+	 *        has manually set the local database to an invalid value
+	 *        (using @ref pm_peer_data_store).
+	 */
+	PM_EVT_LOCAL_DB_CACHE_APPLY_FAILED,
+	/**
+	 * @brief A service changed indication has been sent to a
+	 *        peer, as a result of a call to @ref pm_local_database_has_changed.
+	 *        This event will be followed by a @ref PM_EVT_SERVICE_CHANGED_IND_CONFIRMED
+	 *        event if the peer acknowledges the indication.
+	 */
+	PM_EVT_SERVICE_CHANGED_IND_SENT,
+	/**
+	 * @brief A service changed indication that was sent has been confirmed by a peer.
+	 *        The peer can now be considered aware that the local database has changed.
+	 */
+	PM_EVT_SERVICE_CHANGED_IND_CONFIRMED,
+	/** @brief The peer (peripheral) has requested link encryption, which has been enabled. */
+	PM_EVT_PERIPHERAL_SECURITY_REQ,
+	/**
+	 * @brief The non-volatile storage has been garbage collected, possibly freeing up space.
+	 */
+	PM_EVT_FLASH_GARBAGE_COLLECTED,
+	/** @brief Garbage collection was attempted but failed. */
+	PM_EVT_FLASH_GARBAGE_COLLECTION_FAILED,
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_CONN_CONFIG_REQ event. */
+struct pm_conn_config_req_evt {
+	/** @brief Connected Event parameters. */
+	const ble_gap_evt_connected_t *peer_params;
+	/**
+	 * @brief This pointer must be provided in the reply if the reply function takes a
+	 *        context argument.
+	 */
+	const void *context;
+};
+
+/** @brief Events parameters specific to the @ref PM_EVT_CONN_SEC_START event. */
+struct pm_conn_sec_start_evt {
+	/** @brief The procedure that has started. */
+	enum pm_conn_sec_procedure procedure;
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_SUCCEEDED event. */
+struct pm_conn_secured_evt {
+	/** @brief The procedure that led to securing the link. */
+	enum pm_conn_sec_procedure procedure;
+	/**
+	 * @brief Whether bonding data was successfully requested to be stored.
+	 *        This is false if: No bonding happened, or an internal error occurred
+	 *        when trying to store the data, or if the data was rejected via
+	 *        @ref pm_conn_sec_config_reply.
+	 */
+	bool data_stored;
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_FAILED event. */
+struct pm_conn_secure_failed_evt {
+	/** @brief The procedure that failed. */
+	enum pm_conn_sec_procedure procedure;
+	/** @brief An error code that describes the failure. See @ref PM_SEC_ERRORS. */
+	uint16_t error;
+	/** @brief The party that raised the error, see @ref BLE_GAP_SEC_STATUS_SOURCES. */
+	uint8_t error_src;
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_PARAMS_REQ event. */
+struct pm_conn_sec_params_req_evt {
+	/** @brief Peer security parameters, if role is peripheral. Otherwise, this is NULL. */
+	const ble_gap_sec_params_t *peer_params;
+	/**
+	 * @brief This pointer must be provided in the reply if the reply function takes a
+	 *        context argument.
+	 */
+	const void *context;
+};
+
+/** @brief Actions that can be performed to peer data in persistent storage. */
+enum pm_peer_data_op {
+	/** @brief Writing or overwriting the data. */
+	PM_PEER_DATA_OP_UPDATE,
+	/** @brief Removing the data. */
+	PM_PEER_DATA_OP_DELETE,
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_PEER_DATA_UPDATE_SUCCEEDED event. */
+struct pm_peer_data_update_succeeded_evt {
+	/** @brief The type of the data that was changed. */
+	enum pm_peer_data_id data_id;
+	/** @brief What happened to the data. */
+	enum pm_peer_data_op action;
+	/**
+	 * @brief Token that identifies the operation. For @ref PM_PEER_DATA_OP_DELETE actions,
+	 *        this token can be disregarded. For @ref PM_PEER_DATA_OP_UPDATE actions,
+	 *        compare this token with the token that is received from a call to a
+	 *        @ref PM_PEER_DATA_FUNCTIONS function.
+	 */
+	uint32_t token;
+	/**
+	 * @brief If this is false, no operation was done in non-volatile storage,
+	 *        because the value was already what it should be. Please note that in certain
+	 *        scenarios, this flag will be true even if the new value is the same as the old.
+	 */
+	uint8_t flash_changed: 1;
+};
+
+/** @brief Parameters specific to the @ref PM_EVT_PEER_DATA_UPDATE_FAILED event. */
+struct pm_peer_data_update_failed_evt {
+	/** @brief The type of the data that was supposed to be changed. */
+	enum pm_peer_data_id data_id;
+	/** @brief The action that failed. */
+	enum pm_peer_data_op action;
+	/**
+	 * @brief Token that identifies the operation. For @ref PM_PEER_DATA_OP_DELETE actions,
+	 *        this token can be disregarded. For @ref PM_PEER_DATA_OP_UPDATE actions, compare
+	 *        this token with the token that is received from a call to a
+	 *        @ref PM_PEER_DATA_FUNCTIONS function.
+	 */
+	uint32_t token;
+	/** @brief An error code that describes the failure. */
+	uint32_t error;
+};
+
+/** @brief Standard parameters for failure events. */
+struct pm_failure_evt {
+	/** @brief The error that occurred. */
+	uint32_t error;
+};
+
+/**
+ * @brief An event from the @ref peer_manager module.
+ *
+ * @details The structure contains both standard parameters and parameters that are specific to
+ *          some events.
+ */
+struct pm_evt {
+	/** @brief The type of the event. */
+	enum pm_evt_id evt_id;
+	/** @brief The connection that this event pertains to, or @ref BLE_CONN_HANDLE_INVALID. */
+	uint16_t conn_handle;
+	/** @brief The bonded peer that this event pertains to, or @ref PM_PEER_ID_INVALID. */
+	uint16_t peer_id;
+	union {
+		/** @brief Parameters specific to the @ref PM_EVT_CONN_CONFIG_REQ event. */
+		struct pm_conn_config_req_evt conn_config_req;
+		/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_START event. */
+		struct pm_conn_sec_start_evt conn_sec_start;
+		/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_SUCCEEDED event. */
+		struct pm_conn_secured_evt conn_sec_succeeded;
+		/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_FAILED event. */
+		struct pm_conn_secure_failed_evt conn_sec_failed;
+		/** @brief Parameters specific to the @ref PM_EVT_CONN_SEC_PARAMS_REQ event. */
+		struct pm_conn_sec_params_req_evt conn_sec_params_req;
+		/**
+		 * @brief Parameters specific to the @ref PM_EVT_PEER_DATA_UPDATE_SUCCEEDED event.
+		 */
+		struct pm_peer_data_update_succeeded_evt peer_data_update_succeeded;
+		/** @brief Parameters specific to the @ref PM_EVT_PEER_DATA_UPDATE_FAILED event. */
+		struct pm_peer_data_update_failed_evt peer_data_update_failed;
+		/** @brief Parameters specific to the @ref PM_EVT_PEER_DELETE_FAILED event. */
+		struct pm_failure_evt peer_delete_failed;
+		/** @brief Parameters specific to the @ref PM_EVT_PEERS_DELETE_FAILED event. */
+		struct pm_failure_evt peers_delete_failed_evt;
+		/** @brief Parameters specific to the @ref PM_EVT_ERROR_UNEXPECTED event. */
+		struct pm_failure_evt error_unexpected;
+#ifdef CONFIG_SOFTDEVICE_CENTRAL
+		/** @brief Parameters specific to the @ref PM_EVT_PERIPHERAL_SECURITY_REQ event. */
+		ble_gap_evt_sec_request_t peripheral_security_req;
+#endif
+		/**
+		 * @brief Parameters specific to the @ref PM_EVT_FLASH_GARBAGE_COLLECTION_FAILED
+		 *        event.
+		 */
+		struct pm_failure_evt garbage_collection_failed;
+	};
+};
+
+/**
+ * @brief Event handler for events from the @ref peer_manager module.
+ *
+ * @sa pm_register
+ *
+ * @param[in]  pm_evt  The event that has occurred.
+ */
+typedef void (*pm_evt_handler_t)(const struct pm_evt *pm_evt);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PEER_MANAGER_TYPES_H__ */
+
+/** @} */

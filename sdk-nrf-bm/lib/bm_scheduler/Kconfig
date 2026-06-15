@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2024 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menuconfig BM_SCHEDULER
+	bool "Event scheduler"
+	# Memory management is available without multi-threading
+	depends on KERNEL_MEM_POOL
+	help
+	  A library to defer event processing to main().
+
+if BM_SCHEDULER
+
+config BM_SCHEDULER_BUF_SIZE
+	int "Event buffer size"
+	# Maximum Bluetooth LE event length is 500 (w/ 247 MTU)
+	default 512
+	help
+	  Size of the buffer that events will be copied into.
+	  This is a dedicated heap.
+
+module=BM_SCHEDULER
+module-str=Event scheduler
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif

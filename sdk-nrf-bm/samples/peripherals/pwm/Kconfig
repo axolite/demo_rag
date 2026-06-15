@@ -1,0 +1,36 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "PWM sample"
+
+config SAMPLE_PWM_IRQ_PRIO
+	int "PWM IRQ priority"
+	range 2 7
+	default 3
+	help
+	  Sets the interrupt priority of the PWM peripheral used in the sample.
+	  Levels are from 2 (highest priority) to 7 (lowest priority).
+
+config SAMPLE_PWM_PLAYBACK_COUNT
+	int "PWM playback count"
+	default 1
+	help
+	  Number of times the sequence will be replayed until the
+	  NRFX_PWM_EVT_FINISHED event is raised.
+
+config SAMPLE_PWM_VALUE_REPEATS
+	int "PWM value repeats"
+	default 150
+	help
+	   Number of times that each duty cycle is to be repeated (after being played once).
+
+module=SAMPLE_PWM
+module-str=PWM Sample
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu # "PWM sample"
+
+source "Kconfig.zephyr"

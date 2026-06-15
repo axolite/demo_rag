@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menuconfig BLE_QWR
+	bool "Queued writes"
+	depends on SOFTDEVICE
+	depends on NRF_SDH_BLE
+
+if BLE_QWR
+
+config BLE_QWR_MAX_ATTR
+	int "Maximum queued writes attributes"
+	default 0
+	help
+	   Maximum queued writes attributes
+
+module=BLE_QWR
+module-str=BLE QWR
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif

@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "UART MCUmgr sample"
+
+module=APP_UART_MCUMGR_SAMPLE
+module-str=UART MCUmgr Sample
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu # "UART MCUmgr sample"
+
+source "Kconfig.zephyr"

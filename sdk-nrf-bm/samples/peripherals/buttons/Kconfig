@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "Buttons sample"
+
+module=SAMPLE_BUTTONS
+module-str=Buttons Sample
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu # "Buttons sample"
+
+source "Kconfig.zephyr"

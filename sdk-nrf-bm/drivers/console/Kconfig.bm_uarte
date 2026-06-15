@@ -1,0 +1,57 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig BM_UARTE_CONSOLE
+	bool "UARTE console"
+	depends on CONSOLE
+	depends on NRFX_UARTE
+	select CONSOLE_HAS_DRIVER
+
+if BM_UARTE_CONSOLE
+
+config DEPRECATED_UART_NRFX_UARTE_LEGACY_SHIM
+	bool
+	default n
+
+config BM_UARTE_CONSOLE_UARTE_IRQ_PRIO
+	int "IRQ priority"
+	range 5 7 if SOFTDEVICE
+	range 2 7
+	default 5
+	help
+	  Sets the interrupt priority of the UARTE peripheral used by the console.
+	  Levels are from 2 (highest priority) to 7 (lowest priority).
+	  Interrupt priority level must be greater than 4 (SoftDevice low priority)
+	  when SoftDevice is used.
+
+config BM_UARTE_CONSOLE_UARTE_USE_HWFC
+	bool "Use hardware flow control"
+
+config BM_UARTE_CONSOLE_UARTE_PARITY_INCLUDED
+	bool "Use parity"
+
+config BM_UARTE_CONSOLE_ADD_CR_BEFORE_LF
+	bool "Add carriage return before linefeed"
+	default y
+
+#
+# Console termination
+#
+choice
+	prompt "Termination mode"
+	default BM_UARTE_CONSOLE_CR_LF_TERMINATION
+	help
+		Sets the command terminator used by the serial terminal.
+		Available options are:
+		-  LF termination
+		-  CR+LF termination
+	config BM_UARTE_CONSOLE_LF_TERMINATION
+		bool "LF termination"
+	config BM_UARTE_CONSOLE_CR_LF_TERMINATION
+		bool "CR+LF termination"
+endchoice
+
+endif # BM_UARTE_CONSOLE

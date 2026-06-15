@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+config BM_SW_LPUARTE
+	bool "Low Power UARTE using REQ/RDY lines"
+	depends on BM_GPIOTE
+	depends on BM_TIMER
+	depends on NRFX_UARTE
+	help
+	  Low Power UARTE implements UARTE API and extends standard UARTE
+	  communication with a 2-pin protocol for receiver wake-up and flow control.
+
+if BM_SW_LPUARTE
+
+config BM_SW_LPUARTE_HFXO
+	bool "Turn on HFXO for RX and TX"
+	default y
+	depends on SOFTDEVICE
+	help
+	  According to the UART specification high frequency RC oscillator is
+	  not accurate enough. However, in normal conditions and accurate clock
+	  on the transmitter side it may be accepted to disable it. Turning on
+	  HFXO prolongs receiver activation for up to 3 milliseconds.
+
+module = BM_SW_LPUARTE
+module-str = Low Power UARTE
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # BM_SW_LPUARTE

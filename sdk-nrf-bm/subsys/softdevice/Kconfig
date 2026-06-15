@@ -1,0 +1,72 @@
+#
+# Copyright (c) 2024 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+menu "SoftDevice"
+
+config SOFTDEVICE
+	bool "SoftDevice is present"
+	depends on ZERO_LATENCY_IRQS
+	imply NRF_SDH
+
+config SOFTDEVICE_PERIPHERAL
+	bool
+
+config SOFTDEVICE_CENTRAL
+	bool
+
+config SOFTDEVICE_DATA_LENGTH_UPDATE
+	bool
+
+config SOFTDEVICE_EXTENDED_ADVERTISING
+	bool
+
+config SOFTDEVICE_QOS_CHANNEL_SURVEY_REPORT
+	bool
+
+if SOFTDEVICE
+
+choice SOFTDEVICE_VARIANT
+	prompt "SoftDevice variant"
+
+config SOFTDEVICE_S115
+	bool "s115 SoftDevice"
+	depends on SOC_SERIES_NRF54L
+	select SOFTDEVICE_PERIPHERAL
+	select SOFTDEVICE_DATA_LENGTH_UPDATE
+
+config SOFTDEVICE_S145
+	bool "s145 SoftDevice"
+	depends on SOC_SERIES_NRF54L
+	select SOFTDEVICE_PERIPHERAL
+	select SOFTDEVICE_CENTRAL
+	select SOFTDEVICE_EXTENDED_ADVERTISING
+	select SOFTDEVICE_DATA_LENGTH_UPDATE
+
+endchoice # SOFTDEVICE_VARIANT
+
+config SOFTDEVICE_VARIANT_STR
+	string
+	default "s115" if SOFTDEVICE_S115
+	default "s145" if SOFTDEVICE_S145
+	help
+	  SoftDevice variant used to select the SoftDevice API include path
+	  `components/softdevice/<soctarget>/<softdevice>/<softdevice>_API/include`
+
+config SOFTDEVICE_SOC_VARIANT_STR
+	string
+	default "nrf54l" if SOC_NRF54L15 || SOC_NRF54L10 || SOC_NRF54L05
+	default "nrf54lm" if SOC_NRF54LM20A
+	default "nrf54ls" if SOC_NRF54LS05B
+	default "nrf54lv" if SOC_NRF54LV10A
+	help
+	  SoC series variant used to select the SoftDevice API include path
+	  `components/softdevice/<soctarget>/<softdevice>/<softdevice>_API/include`
+
+endif
+
+endmenu
+
+config CLOCK_CONTROL
+	default n if SOFTDEVICE

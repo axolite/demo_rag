@@ -1,0 +1,125 @@
+.. _ble_bms_sample:
+
+Bluetooth: Bond Management Service (BMS)
+########################################
+
+.. contents::
+   :local:
+   :depth: 2
+
+This sample demonstrates how to use the Bond Management Service (BMS).
+
+Requirements
+************
+
+The sample supports the following development kits:
+
+.. tabs::
+
+   .. group-tab:: Simple board variants
+
+      The following board variants do **not** have DFU capabilities:
+
+      .. include:: /includes/supported_boards_all_non-mcuboot_variants_s115.txt
+
+      .. include:: /includes/supported_boards_all_non-mcuboot_variants_s145.txt
+
+   .. group-tab:: MCUboot board variants
+
+      The following board variants have DFU capabilities:
+
+      .. include:: /includes/supported_boards_all_mcuboot_variants_s115.txt
+
+      .. include:: /includes/supported_boards_all_mcuboot_variants_s145.txt
+
+Overview
+********
+
+When connected, the sample waits for the client's requests to perform any bond-deleting operation.
+
+.. include:: /includes/allow_list_sample.txt
+
+User interface
+**************
+
+Button 0:
+   When pairing with authentication, press this button to confirm the passkey shown in the COM listener and complete pairing with the other device.
+   See `Testing`_.
+
+Button 1:
+   Keep the button pressed while resetting the board to delete bonding information for all peers stored on the device.
+
+   When pairing with authentication, press this button to reject the passkey shown in the COM listener to prevent pairing with the other device.
+
+LED 0:
+   Lit when the device is initialized.
+
+LED 1:
+   Lit when a device is connected.
+
+.. _ble_bms_sample_testing:
+
+Building and running
+********************
+
+This sample can be found under :file:`samples/bluetooth/ble_bms/` in the |BMshort| folder structure.
+
+For details on how to create, configure, and program a sample, see :ref:`getting_started_with_the_samples`.
+
+Testing
+=======
+
+1. Compile and program the application.
+#. Connect to the kit that runs this sample with a terminal emulator (for example, the `Serial Terminal app`_).
+#. Reset the kit.
+#. In the Serial Terminal, observe that the ``BLE BMS sample initialized`` message is printed.
+#. Observe that the ``Advertising as nRF_BM_BMS`` message is printed.
+   You can configure the advertising name using the :kconfig:option:`CONFIG_SAMPLE_BLE_DEVICE_NAME` Kconfig option.
+   For information on how to do this, see `Configuring Kconfig`_.
+#. Open `nRF Connect for Desktop`_.
+#. Open the `Bluetooth Low Energy app`_ and select the connected device that is used for communication.
+#. Connect to the device from the app.
+   If the device is not advertising, reset the board with the :guilabel:`Reset Board` option in |VSC| or by pressing the reset button on the development kit.
+#. Bind with the device:
+
+   a. Click the :guilabel:`Settings` button for the device in the app.
+   #. Select :guilabel:`Pair`.
+   #. Select :guilabel:`Keyboard and display` in the IO capabilities setting.
+   #. Select :guilabel:`Perform Bonding`.
+   #. Click :guilabel:`Pair`.
+
+#. Check the logs to verify that the connection security is updated.
+#. Disconnect the device in the app.
+#. Reconnect again and verify that the connection security is updated automatically.
+#. Verify that the Feature Characteristic of the Bond Management Service displays ``10 08 02``.
+   This means that the following features are supported:
+
+   * Deletion of the bonds for the current connection of the requesting device.
+   * Deletion of all bonds on the Server with the Authorization Code.
+   * Deletion of all bonds on the Server except the ones of the requesting device with the Authorization Code.
+
+#. Write ``03`` to the Bond Management Service Control Point Characteristic.
+   ``03`` is the command to delete the current bond.
+#. Disconnect the device to trigger the bond deletion procedures.
+#. Delete the bond information of the central device in the app:
+
+   a. Click the :guilabel:`Settings` button for the device in the app.
+   #. Click :guilabel:`Delete bond information`.
+
+#. Reconnect the devices and verify that the connection security is not updated.
+#. Bond both devices again.
+#. Write ``06 41 42 43 44`` to the Bond Management Service Control Point Characteristic.
+   ``06`` is the command to delete all bonds on the server, followed by the authorization code ``ABCD`` (ASCII ``0x41 0x42 0x43 0x44``).
+#. Disconnect the device to trigger the bond deletion procedures.
+#. Delete the bond information of the central device again.
+#. Reconnect the devices again and verify that the connection security is not updated.
+
+.. note::
+   The default authorization code ``ABCD`` (ASCII ``0x41 0x42 0x43 0x44``) is configurable through the :kconfig:option:`CONFIG_SAMPLE_BLE_BMS_AUTHORIZATION_CODE` Kconfig option.
+   The maximum allowed length is :c:macro:`BLE_BMS_AUTH_CODE_MAX_LEN` (127 bytes), which comes from the BMS control point definition.
+
+   Authorization codes up to **127 bytes** are supported.
+   You may configure the code to any value within this limit as needed.
+
+   If this security feature is not required, it can be enabled or disabled using the :kconfig:option:`CONFIG_SAMPLE_BLE_BMS_USE_AUTHORIZATION_CODE` Kconfig option.
+   After changing the configuration, rebuild the sample and test how bond deletion behaves with or without an authorization code.

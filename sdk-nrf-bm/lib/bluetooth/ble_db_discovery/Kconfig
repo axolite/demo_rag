@@ -1,0 +1,33 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig BLE_DB_DISCOVERY
+	bool "Bluetooth LE database discovery"
+	depends on SOFTDEVICE_CENTRAL
+	depends on NRF_SDH_BLE
+	depends on BLE_GATT_QUEUE
+
+if BLE_DB_DISCOVERY
+
+config BLE_DB_DISCOVERY_MAX_SRV
+	int "Maximum number of services for discovery"
+	default 6
+	help
+	  Maximum number of service UUIDs that can be registered for discovery per DB discovery
+	  instance. Increasing this value will increase the size of 'struct ble_db_discovery'.
+
+config BLE_DB_DISCOVERY_SRV_DISC_START_HANDLE
+	hex "Attribute handle to start discovery from"
+	range 0x0001 0xFFFF
+	default 0x0001
+	help
+	  The attribute handle value to start service discovery from.
+
+module=BLE_DB_DISCOVERY
+module-str=BLE DB Discovery
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif # BLE_DB_DISCOVERY

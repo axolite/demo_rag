@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+config BM_NFC_PLATFORM
+	bool "Common NFC configuration for Bare Metal"
+	depends on NCS_BM
+	default y if NFC_T2T_NRFXLIB || NFC_T4T_NRFXLIB
+	select NRFX_NFCT
+	help
+	  Enable common configuration for the NFC
+
+if BM_NFC_PLATFORM
+
+config BM_NFCT_IRQ_PRIORITY
+	int "NFCT interrupt priority for Bare Metal"
+	range 2 7
+	default 5 if SOFTDEVICE
+	default 3
+	help
+	  Sets NFC interrupt priority.
+	  Levels are from 2 (highest priority) to 7 (lowest priority).
+	  Interrupt priority level must be greater than 4 (SoftDevice low priority)
+	  if you want to call into SoftDevice from the NFC driver.
+
+
+module = BM_NFC_PLATFORM
+module-str = nfc_platform
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endif # BM_NFC_PLATFORM

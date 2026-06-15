@@ -1,0 +1,153 @@
+.. _install_nrf_bm:
+
+Installing the |BMlong|
+#######################
+
+.. contents::
+   :local:
+   :depth: 2
+
+You can use Visual Studio Code and the `nRF Connect for Visual Studio Code`_ extension to install |BMshort|.
+
+Install prerequisites
+*********************
+
+Complete the following steps to install the prerequisites:
+
+1. Install `nRF Connect for Desktop`_.
+   Pay attention to the following information:
+
+   * nRF Connect for Desktop requires SEGGER J-Link.
+     When you install nRF Connect for Desktop, nRF Connect for Desktop asks you to install the recommended version of SEGGER J-Link.
+   * nRF Connect for Desktop has some `additional requirements`_ for some operating systems.
+   * nRF Connect for Desktop installs the Quick Start app automatically.
+
+2. Connect the nRF54L15 DK to your PC.
+3. In nRF Connect for Desktop, launch the Quick Start app.
+   The nRF54L15 DK will be detected by the app and it will guide you through initial configuration.
+4. Complete the steps of the Quick Start wizard.
+   Make sure to select :guilabel:`VS Code IDE` as the development environment and to install the `Serial Terminal app`_.
+5. Install the latest version of |VSC|.
+6. In |VSC|, install the latest version of the `nRF Connect for VS Code Extension Pack`_.
+   The |nRFVSC| comes with its own bundled version of some of the nRF Util commands.
+
+.. _cloning_the_repositories_nrf_bm:
+
+Getting the code
+****************
+
+Every |BMlong| release consists of:
+
+* A combination of Git repositories at different versions and revisions, managed together by West.
+* A pre-packaged SDK containing a source mirror of the Git repositories required to get started with |BMshort|.
+
+.. tabs::
+
+   .. group-tab:: Pre-packaged SDK & Toolchain
+
+      Complete the following steps to get the |BMshort| code using the |nRFVSC|.
+
+      1. If this is your first time installing the SDK, click :guilabel:`Install SDK` in the extension's :guilabel:`Welcome View`.
+
+         If you have installed an SDK or a Toolchain before, click on :guilabel:`Manage SDKs` in the extension's :guilabel:`Welcome View`.
+         Then, select :guilabel:`Install SDK` from the quick pick menu that appears.
+
+      #. Select the region for download.
+
+         You only need to select the region for downloads once.
+         The selected region applies to all future SDK and toolchain downloads.
+         You can later change it in the |VSC| settings.
+
+      #. When prompted to **Select SDK type**, click :guilabel:`nRF Connect SDK Bare Metal`.
+
+      #. When prompted to **Select an SDK version (or enter the branch, tag or commit SHA) to install...**, click :guilabel:`v2.0.0` marked on the right by the label :guilabel:`Pre-packaged SDKs & Toolchains`.
+
+      #. When prompted to select a destination for the SDK, the default suggestion is recommended.
+         Then, press **Enter**.
+         The installer will proceed to install |BMshort| and the respective toolchain that it requires.
+
+   .. group-tab:: GitHub
+
+         1. Install the toolchain.
+
+            The |BMshort| toolchain includes tools and modules required to build the samples and applications on top of it.
+
+            Use nRF Connect for VS Code to install the toolchain:
+
+            .. note::
+               These instructions are tested using |nRFVSC| version 2025.5.92.
+               Newer versions of the extension might feature changes to the user interface.
+               It is recommended to use the latest version of the extension.
+
+            1. Open the nRF Connect extension in |VSC| by clicking its icon in the :guilabel:`Activity Bar`.
+            #. If this is your first time installing the toolchain, click :guilabel:`Install Toolchain` in the extension's :guilabel:`Welcome View`.
+
+               If you have installed a toolchain before, click on :guilabel:`Manage toolchains` in the extension's :guilabel:`Welcome View`.
+               Then, select :guilabel:`Install Toolchain` from the quick pick menu that appears.
+
+            #. The list of available stable toolchain versions appears in the |VSC|'s quick pick.
+            #. Select the toolchain version to install.
+               For this release of |BMshort|, use version |ncs_release| of the toolchain.
+
+            .. note::
+               Every |BMshort| release uses the toolchain of the |NCS| version that it is based on.
+
+            The toolchain installation starts in the background, as can be seen in the notification that appears.
+            If this is your first installation of the toolchain, wait for it to finish before moving to the next step of this procedure (getting the code).
+
+            When you install the toolchain for the first time, the installed version is automatically selected for your project.
+
+         #. Install the SDK.
+
+            Complete the following steps to get the |BMshort| code using the |nRFVSC|.
+
+            1. In the extension's :guilabel:`Welcome View`, click :guilabel:`Manage SDKs`.
+               A popup window will appear.
+
+            #. Click :guilabel:`Install SDK`.
+
+            #. When prompted to **Select SDK type**, click :guilabel:`nRF Connect SDK Bare Metal`.
+
+            #. When prompted to **Select an SDK version (or enter the branch, tag or commit SHA) to install...**, click :guilabel:`v2.0.0` marked on the right by the label :guilabel:`GitHub`.
+
+            #. When prompted to select a destination for the SDK, the default suggestion is recommended.
+               Then, press **Enter**.
+               |BMshort| will now be installed.
+
+Your directory structure should now look similar to this:
+
+.. code-block:: none
+
+   ncs
+   ├─── toolchains
+   │  └─── <toolchain_version>
+   └─── nrf-bm/<sdk_version>
+      ├─── bootloader
+      ├─── modules
+      ├─── nrf
+      ├─── nrf-bm
+      ├─── nrfxlib
+      ├─── test
+      ├─── tools
+      ├─── zephyr
+
+Next steps
+**********
+
+You can now proceed to test the :ref:`samples` included in this version of |BMshort|.
+
+The samples can be found in the :file:`nrf-bm/samples` folder, and are divided into subfolders:
+
+* :file:`bluetooth` for the samples showcasing Bluetooth® LE functionalities using the SoftDevice.
+  See :ref:`ble_samples`.
+* :file:`boot` for the samples showcasing the functionalities related to Device Firmware Update.
+  See :ref:`dfu_samples`.
+* :file:`nfc` for the samples showcasing the functionalities of Near Field Communication (NFC).
+  See :ref:`nfc_samples`.
+* :file:`peripherals` for the samples showcasing various peripheral functionalities that do not require the SoftDevice.
+  See :ref:`peripheral_samples`.
+* :file:`subsys` for the samples showcasing the usage of subsystems.
+  See :ref:`subsys_samples`.
+
+
+Each sample documentation contains full information on how to build, flash, and test the respective sample.

@@ -1,0 +1,91 @@
+.. _bm_lpuarte_sample:
+
+LPUARTE
+#######
+
+.. contents::
+   :local:
+   :depth: 2
+
+The LPUARTE sample demonstrates how to configure and use the LPUARTE driver as a low power alternative to regular UART.
+
+Requirements
+************
+
+The sample supports the following development kits:
+
+.. tabs::
+
+   .. group-tab:: Simple board variants
+
+      The following board variants do **not** have DFU capabilities:
+
+      .. include:: /includes/supported_boards_all_non-mcuboot_variants_s115.txt
+
+      .. include:: /includes/supported_boards_all_non-mcuboot_variants_s145.txt
+
+   .. group-tab:: MCUboot board variants
+
+      The following board variants have DFU capabilities:
+
+      .. include:: /includes/supported_boards_all_mcuboot_variants_s115.txt
+
+      .. include:: /includes/supported_boards_all_mcuboot_variants_s145.txt
+
+The sample also requires the following pins to be connected, as defined in the boards :file:`board-config.h` header:
+
+  .. include:: /includes/lpuarte_board_connections.txt
+
+  #. For two-device setup:
+
+    - Device 1 **LPUARTE TX** → Device 2 **LPUARTE RX**
+    - Device 1 **LPUARTE RX** → Device 2 **LPUARTE TX**
+    - Device 1 **LPUARTE REQ** → Device 2 **LPUARTE RDY**
+    - Device 1 **LPUARTE RDY** → Device 2 **LPUARTE REQ**
+    - Connect **GND** between both devices.
+
+  #. For single-device loopback setup:
+
+    - **LPUARTE TX** → **LPUARTE RX**
+    - **LPUARTE REQ** → **LPUARTE RDY**
+
+Additionally, the sample requires a logic analyzer to observe the LPUARTE activity and a current measurement instrument to measure the current.
+
+Overview
+********
+
+The sample initializes the application LPUARTE instance, specified in the :file:`board-config.h` file in the board.
+It then implements a simple loopback using a single LPUARTE instance.
+By default, the console and logging are disabled to demonstrate low power consumption when UART is active.
+
+User interface
+**************
+
+LED 0:
+  If configured, lit when the device is initialized. (Configurable using the :kconfig:option:`CONFIG_SAMPLE_LPUARTE_INIT_LED` kconfig option)
+
+Building and running
+********************
+
+This sample can be found under :file:`samples/peripherals/lpuarte/` in the |BMshort| folder structure.
+
+For details on how to create, configure, and program a sample, see :ref:`getting_started_with_the_samples`.
+
+Testing
+=======
+
+You can test this sample by performing the following steps:
+
+#. Compile and program the application.
+#. Connect the logic analyzer to the LPUARTE pins, to confirm UARTE activity.
+   The request/response pins are HIGH in the idle state.
+   When a transmission starts, the pins are pulled LOW to signal the start of data transfer.
+   At the same time, activity should be visible on the UART RX/TX pins.
+
+   Configure the logic analyzer to use an ``asynchronous serial (UART) protocol`` on the RX/TX
+   connection.
+   With the default sample configuration, use a baud rate of ``115200``, and verify that a
+   ``5-byte message`` is transmitted with the decimal values ``1``, ``2``, ``3``, ``4``, and ``5``.
+#. Measure the current to confirm that the power consumption indicates that high-frequency clock is disabled during the idle stage.
+
+During the idle stage, the UARTE receiver is ready to start reception, as the request pin wakes it up.

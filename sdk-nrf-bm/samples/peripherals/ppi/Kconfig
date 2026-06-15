@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "PPI sample"
+
+config SAMPLE_TIMER_IRQ_PRIO
+	int "Timer IRQ priority"
+	range 2 7
+	default 3
+	help
+	  Sets the interrupt priority of the Timer peripheral used in the sample.
+	  Levels are from 2 (highest priority) to 7 (lowest priority).
+
+config SAMPLE_LED_BLINK_INTERVAL_MS
+	int "LED blink interval in milliseconds"
+	default 500
+	help
+	   This is the time the LED remains in an on and off state.
+
+module=SAMPLE_PPI
+module-str=PPI Sample
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
+endmenu # "PPI sample"
+
+source "Kconfig.zephyr"

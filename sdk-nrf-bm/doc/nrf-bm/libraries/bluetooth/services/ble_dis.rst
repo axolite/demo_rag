@@ -1,0 +1,66 @@
+.. _lib_ble_service_dis:
+
+Device Information Service (DIS)
+################################
+
+.. contents::
+   :local:
+   :depth: 2
+
+This module implements the Device Information Service.
+
+Overview
+********
+
+During initialization, the module adds the Device Information Service to the Bluetooth LE stack database.
+It then encodes the supplied information, and adds the corresponding characteristics.
+
+Configuration
+*************
+
+Set the :kconfig:option:`CONFIG_BLE_DIS` Kconfig option to enable the service.
+
+The DIS service can be configured by using the following Kconfig options:
+
+* :kconfig:option:`CONFIG_BLE_DIS_MANUFACTURER_NAME` - Sets the manufacturer name.
+* :kconfig:option:`CONFIG_BLE_DIS_MODEL_NUMBER` - Sets the model number.
+* :kconfig:option:`CONFIG_BLE_DIS_SERIAL_NUMBER` - Sets the serial number.
+* :kconfig:option:`CONFIG_BLE_DIS_HW_REVISION` - Sets the hardware revision.
+* :kconfig:option:`CONFIG_BLE_DIS_FW_REVISION` - Sets the firmware revision.
+* :kconfig:option:`CONFIG_BLE_DIS_SW_REVISION` - Sets the software revision.
+* :kconfig:option:`CONFIG_BLE_DIS_SYSTEM_ID` - Includes the system ID characteristic in the Device Information Service.
+* :kconfig:option:`CONFIG_BLE_DIS_SYSTEM_ID_OUI` - Sets the organization unique ID.
+* :kconfig:option:`CONFIG_BLE_DIS_SYSTEM_ID_MID` - Sets the manufacturer unique ID.
+* :kconfig:option:`CONFIG_BLE_DIS_PNP_ID` - Includes plug and play ID characteristic.
+* :kconfig:option:`CONFIG_BLE_DIS_PNP_VID_SRC` - Sets the vendor ID source.
+* :kconfig:option:`CONFIG_BLE_DIS_PNP_VID` - Sets the vendor ID.
+* :kconfig:option:`CONFIG_BLE_DIS_PNP_PID` - Sets the product ID.
+* :kconfig:option:`CONFIG_BLE_DIS_PNP_VER` - Sets the product version.
+* :kconfig:option:`CONFIG_BLE_DIS_REGULATORY_CERT` - Includes IEEE regulatory certifications.
+* :kconfig:option:`CONFIG_BLE_DIS_REGULATORY_CERT_LIST` - Sets the regulatory certification list.
+
+Initialization
+==============
+
+The service is initialized by calling the :c:func:`ble_dis_init` function.
+Configuration is otherwise done through the Kconfig options.
+
+Usage
+*****
+
+When enabled, the module will add the Device Information Service with information as specified by the Kconfig options.
+
+Dependencies
+************
+
+This service has the following |BMshort| dependencies:
+
+* SoftDevice - :kconfig:option:`CONFIG_SOFTDEVICE`
+
+API documentation
+*****************
+
+| Header file: :file:`include/bm/bluetooth/services/ble_dis.h`
+| Source files: :file:`subsys/bluetooth/services/ble_dis/`
+
+:ref:`Device Information Service API reference <api_dis>`

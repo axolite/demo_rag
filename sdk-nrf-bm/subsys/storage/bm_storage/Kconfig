@@ -1,0 +1,52 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig BM_STORAGE
+	bool "Bare Metal storage"
+	help
+	  Bare Metal storage library.
+
+if BM_STORAGE
+
+menu "Storage backend"
+
+config BM_STORAGE_BACKEND_RRAM
+	bool "RRAMC"
+	depends on !SOFTDEVICE
+	help
+	  A backend using the RRAMC peripheral.
+
+config BM_STORAGE_BACKEND_SD
+	bool "SoftDevice"
+	default y
+	depends on SOFTDEVICE
+	depends on NRF_SDH
+	depends on RING_BUFFER
+	help
+	  A backend using the SoftDevice.
+
+config BM_STORAGE_BACKEND_NATIVE_SIM
+	bool "Simulated (native)"
+	depends on BOARD_NATIVE_SIM
+	depends on ZTEST
+	help
+	  A backend designed to be used for tests.
+
+endmenu
+
+if BM_STORAGE_BACKEND_SD
+
+rsource "sd/Kconfig"
+
+endif # BM_STORAGE_BACKEND_SD
+
+if BM_STORAGE_BACKEND_NATIVE_SIM
+
+rsource "native_sim/Kconfig"
+
+endif # BM_STORAGE_BACKEND_NATIVE_SIM
+
+endif # BM_STORAGE

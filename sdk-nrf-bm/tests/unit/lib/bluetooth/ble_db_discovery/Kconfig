@@ -1,0 +1,6 @@
+# Clear dependencies for BLE_DB_DISCOVERY and enable it to allow
+# testing the features without enabling the library.
+config BLE_DB_DISCOVERY
+	default y
+
+source "Kconfig.zephyr"

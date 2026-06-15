@@ -1,0 +1,230 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+choice BM_BOOTLOADER
+	prompt "Bootloader selection"
+
+config BM_BOOTLOADER_NONE
+	bool "None"
+	help
+	  Do not include a bootloader image in the build.
+
+config BM_BOOTLOADER_MCUBOOT
+	bool "MCUboot"
+	help
+	  Include MCUboot image as the bootloader image to use.
+
+endchoice
+
+if BM_BOOTLOADER_MCUBOOT
+
+menu "MCUboot configuration"
+
+choice BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE
+	prompt "Signature type"
+	default BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519 if SOC_SERIES_NRF54L
+	default BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_RSA
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_NONE
+	bool "No signature; use only hash check"
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_RSA
+	bool "RSA signatures"
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ECDSA_P256
+	bool "Elliptic curve digital signatures with curve P-256"
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519
+	bool "Edwards curve digital signatures using ed25519"
+
+endchoice
+
+config BM_CRACEN_MICROCODE_LOAD_ONCE
+	bool "Load CRACEN microcode once only"
+	depends on BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519
+	depends on !SOC_NRF54LM20A && !SOC_NRF54LM20B && !SOC_NRF54LV10A && !SOC_NRF54LS05B
+	default y
+	help
+	  Enable CRACEN microcode loading in MCUBoot, while disabling elsewhere.
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_KEY_FILE
+	string "Signing PEM key file" if !BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_NONE
+	default "$(ZEPHYR_MCUBOOT_MODULE_DIR)/root-ec-p256.pem" if BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ECDSA_P256
+	default "$(ZEPHYR_MCUBOOT_MODULE_DIR)/root-ed25519.pem" if BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519
+	default "$(ZEPHYR_MCUBOOT_MODULE_DIR)/root-rsa-2048.pem" if BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_RSA
+	default ""
+	help
+	  Absolute path to signing key file to use with MCUBoot.
+
+config BM_BOOTLOADER_MCUBOOT_SIGNATURE_USING_KMU
+	bool "Use KMU stored keys for signature verification"
+	depends on SOC_SERIES_NRF54L && BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519
+	help
+	  The device needs to be provisioned with the proper set of keys.
+
+config BM_BOOTLOADER_MCUBOOT_GENERATE_DEFAULT_KMU_KEYFILE
+	bool "Generate default keyfile for provisioning during build"
+	depends on BM_BOOTLOADER_MCUBOOT_SIGNATURE_USING_KMU
+	default y
+	help
+	  If enabled, the build system will generate keyfile.json file in the build directory.
+
+menu "Firmware loader entrance modes"
+	depends on !BM_FIRMWARE_LOADER_NONE
+
+config BM_BOOTLOADER_MCUBOOT_FIRMWARE_LOADER_ENTRANCE_GPIO
+	bool "GPIO"
+	default y
+
+config BM_BOOTLOADER_MCUBOOT_FIRMWARE_LOADER_ENTRANCE_PIN_RESET
+	bool "Check for device reset by pin"
+
+config BM_BOOTLOADER_MCUBOOT_FIRMWARE_LOADER_ENTRANCE_BOOT_MODE
+	bool "Check boot mode via retention subsystem"
+
+endmenu
+
+config BM_APP_CAN_SETUP_FIRMWARE_LOADER_NAME
+	bool "Remote setup firmware loader BLE Advertising Name [EXPERIMENTAL]"
+	depends on !BM_FIRMWARE_LOADER_NONE
+	select EXPERIMENTAL
+	help
+	  If enable, the application and the firmware loader will be configured
+	  for supporting setup of the firmware loader BLE name using the settings retention
+	  memory backend. The settings key for writing the name is `fw_loader/adv_name`.
+
+choice BM_BOOTLOADER_MCUBOOT_IMG_HASH_ALG
+	prompt "Hashing algorithm"
+	default BM_BOOT_IMG_HASH_ALG_PURE if BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519 && SOC_SERIES_NRF54L
+	default BM_BOOT_IMG_HASH_ALG_SHA256
+
+config BM_BOOT_IMG_HASH_ALG_SHA256
+	bool "SHA256"
+	depends on !BM_BOOTLOADER_MCUBOOT_SIGNATURE_USING_KMU
+
+config BM_BOOT_IMG_HASH_ALG_SHA512
+	bool "SHA512"
+	depends on SOC_SERIES_NRF54L
+	depends on !BM_BOOTLOADER_MCUBOOT_SIGNATURE_USING_KMU
+
+config BM_BOOT_IMG_HASH_ALG_PURE
+	bool "Pure (hash of data directly without hash)"
+	depends on BM_BOOTLOADER_MCUBOOT_SIGNATURE_TYPE_ED25519 && SOC_SERIES_NRF54L
+
+endchoice
+
+config BM_BOOT_BOOTCONF_LOCK_WRITES
+	bool "Protect bootloader's NVM from writes"
+	depends on SOC_NRF54L15_CPUAPP || SOC_NRF54L10_CPUAPP || SOC_NRF54L05_CPUAPP || SOC_NRF54LV10A_CPUAPP
+	help
+	  Sets RRAMC's BOOTCONF region protection to disable writes.
+
+endmenu
+
+endif # BM_BOOTLOADER_MCUBOOT
+
+if !BM_BOOTLOADER_NONE
+
+config BM_BOOTLOADER_IMAGE_NAME
+	string
+	default "mcuboot" if BM_BOOTLOADER_MCUBOOT
+	help
+	  Name of bootloader image.
+
+config BM_BOOTLOADER_IMAGE_PATH
+	string
+	default "${ZEPHYR_MCUBOOT_MODULE_DIR}/boot/zephyr" if BM_BOOTLOADER_MCUBOOT
+	help
+	  Source directory of bootloader image.
+
+choice BM_FIRMWARE_LOADER
+	prompt "Firmware loader selection"
+
+config BM_FIRMWARE_LOADER_NONE
+	bool "None"
+	help
+	  Do not include a firmware loader image in the build.
+
+config BM_FIRMWARE_LOADER_BT_MCUMGR
+	bool "Bluetooth MCUmgr"
+	help
+	  Include Bluetooth MCUmgr image as the firmware loader image to use (uses SoftDevice).
+
+config BM_FIRMWARE_LOADER_UART_MCUMGR
+	bool "UART MCUmgr"
+	help
+	  Include UART MCUmgr image as the firmware loader image to use.
+
+endchoice
+
+if !BM_FIRMWARE_LOADER_NONE
+
+config BM_FIRMWARE_LOADER_IMAGE_NAME
+	string
+	default "firmware_loader"
+	help
+	  Name of firmware loader image.
+
+config BM_FIRMWARE_LOADER_IMAGE_PATH
+	string
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/applications/firmware_loader/ble_mcumgr" if BM_FIRMWARE_LOADER_BT_MCUMGR
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/applications/firmware_loader/uart_mcumgr" if BM_FIRMWARE_LOADER_UART_MCUMGR
+	help
+	  Source directory of firmware loader image.
+
+endif
+
+endif
+
+choice SOFTDEVICE_SELECTION
+	prompt "SoftDevice selection"
+
+config SOFTDEVICE_NONE
+	bool "None"
+
+config SOFTDEVICE_S115
+	bool "S115"
+	depends on SOC_SERIES_NRF54L
+
+config SOFTDEVICE_S145
+	bool "S145"
+	depends on SOC_SERIES_NRF54L
+
+endchoice
+
+config SOFTDEVICE_FILE
+	string
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s115/s115_nrf54l05_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54L05
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s115/s115_nrf54l10_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54L10
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s115/s115_nrf54l15_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54L15
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s145/s145_nrf54l05_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54L05
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s145/s145_nrf54l10_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54L10
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54l/s145/s145_nrf54l15_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54L15
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54lv/s115/s115_nrf54lv10_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54LV10A
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54lv/s145/s145_nrf54lv10_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54LV10A
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54lm/s115/s115_nrf54lm20_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54LM20A
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54lm/s145/s145_nrf54lm20_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54LM20A
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54ls/s115/s115_nrf54ls05_10.0.0_softdevice.hex" if SOFTDEVICE_S115 && SOC_NRF54LS05B
+	default "$(ZEPHYR_NRF_BM_MODULE_DIR)/components/softdevice/nrf54ls/s145/s145_nrf54ls05_10.0.0_softdevice.hex" if SOFTDEVICE_S145 && SOC_NRF54LS05B
+	help
+	  Specifies the path to the softdevice hex file.
+
+config METADATA_SIZE
+	hex
+	default 0x200 if SOC_SERIES_NRF54L
+	help
+	  Specifies the size of the metadata partition.
+
+config METADATA_ENTRY_SIZE
+	int
+	default 32
+	help
+	  Specifies the size of each metadata entry.
+
+config INSTALLER_HEX_OUTPUT
+	bool "Installer hex output [DEBUG]"
+	help
+	  Will output a hex file of the installer image, this is for debug usage only.

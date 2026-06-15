@@ -1,0 +1,141 @@
+/*
+ * Copyright (c) 2018-2025 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+/**
+ * @file peer_manager_handler.h
+ *
+ * @defgroup pm_handler Peer Manager Standard Event Handlers
+ * @ingroup peer_manager
+ * @{
+ * @brief Standard event handlers implementing some best practices for Bluetooth LE security.
+ */
+
+#ifndef PEER_MANAGER_HANDLER_H__
+#define PEER_MANAGER_HANDLER_H__
+
+#include <ble.h>
+#include <bm/bluetooth/peer_manager/peer_manager.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Standard function for making Peer Manager calls based on Peer Manager events.
+ *
+ * This function does the following:
+ *  - Logs PM events at different severity levels.
+ *  - Starts encryption if connected to an already bonded peer. This is affected by @ref
+ *    PM_HANDLER_SEC_DELAY_MS.
+ *
+ * @note In normal circumstances, this function should be called for every Peer Manager event.
+ *
+ * @param[in] pm_evt  Peer Manager event to handle.
+ */
+void pm_handler_on_pm_evt(const struct pm_evt *pm_evt);
+
+/**
+ * @brief Auxiliary standard function for logging Peer Manager events.
+ *
+ * This function logs all PM events using Zephyr's logging API, at different severity levels.
+ *
+ * @note This function is called internally by @ref pm_handler_on_pm_evt.
+ *
+ * @param[in] pm_evt  Peer Manager event to log.
+ */
+void pm_handler_pm_evt_log(const struct pm_evt *pm_evt);
+
+/**
+ * @brief Auxiliary standard function for maintaining room in non-volatile storage based on Peer
+ *        Manager events.
+ *
+ * This function does the following:
+ *  - Ranks peers by when they last connected.
+ *  - Garbage collects the non-volatile storage when needed.
+ *  - Deletes the lowest ranked peer(s) when garbage collection is insufficient.
+ *
+ * @note See also @ref pm_handler_flash_clean_on_return.
+ * @note In normal circumstances, this function should be called for every Peer Manager event.
+ * @note This function is a supplement to @ref pm_handler_on_pm_evt, not its replacement.
+ *
+ * @param[in] pm_evt  Peer Manager event to handle.
+ */
+void pm_handler_flash_clean(const struct pm_evt *pm_evt);
+
+/**
+ * @brief Function to call when a Peer Manager function returns @ref NRF_ERROR_RESOURCES.
+ *
+ * @note This should only be used if @ref pm_handler_flash_clean is also used.
+ */
+void pm_handler_flash_clean_on_return(void);
+
+/**
+ * @brief Auxiliary standard function for disconnecting when the connection could not be secured.
+ *
+ * This function disconnects whenever connection security fails, i.e. whenever it receives a
+ * @ref PM_EVT_CONN_SEC_FAILED.
+ *
+ * @note In normal circumstances, this function should be called for every Peer Manager event.
+ * @note This function is a supplement to @ref pm_handler_on_pm_evt, not its replacement.
+ *
+ * @param[in] pm_evt  Peer Manager event to handle.
+ */
+void pm_handler_disconnect_on_sec_failure(const struct pm_evt *pm_evt);
+
+/**
+ * @brief Auxiliary standard function for disconnecting on insufficient connection security.
+ *
+ * This function disconnects whenever the connection security succeeds, that is whenever it
+ * receives a @ref PM_EVT_CONN_SEC_SUCCEEDED, but the established security does not fulfill the
+ * provided criteria.
+ *
+ * @note In normal circumstances, this function should be called for every Peer Manager event.
+ * @note This function is a supplement to @ref pm_handler_on_pm_evt, not its replacement.
+ *
+ * @param[in] pm_evt        Peer Manager event to handle.
+ * @param[in] min_conn_sec  Minimum security status below which to disconnect the link.
+ */
+void pm_handler_disconnect_on_insufficient_sec(const struct pm_evt *pm_evt,
+					       struct pm_conn_sec_status *min_conn_sec);
+
+/**
+ * @brief Secure a connection when it is established.
+ *
+ * This function starts security when receiving a @ref BLE_GAP_EVT_CONNECTED event. This is
+ * affected by @ref PM_HANDLER_SEC_DELAY_MS.
+ *
+ * @note In normal circumstances, this function should be called for every Bluetooth LE event.
+ *
+ * @param[in] ble_evt Event to handle.
+ */
+void pm_handler_secure_on_connection(const ble_evt_t *ble_evt);
+
+/**
+ * @brief Secure a connection if a GATT read or write operation lacks security.
+ *
+ * This function starts pairing if a GATTC procedure fails with insufficient encryption
+ * or insufficient authentication. This is meant to delay performing pairing/bonding until
+ * it is actually needed to access resources. This is affected by @ref PM_HANDLER_SEC_DELAY_MS.
+ *
+ * @note When using this handler, the failed GATTC operation must be retried by the user.
+ *
+ * @note This does not work when using Write Without Response (@ref BLE_GATT_OP_WRITE_CMD) because
+ *       the server does not send any response, even on error. Instead, the write will be
+ *       silently dropped by the server.
+ *
+ * @note In normal circumstances, this function should be called for every Bluetooth LE event.
+ *
+ * @param[in] ble_evt Event to handle.
+ */
+void pm_handler_secure_on_error(const ble_evt_t *ble_evt);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PEER_MANAGER_HANDLER_H__ */
+
+/** @} */

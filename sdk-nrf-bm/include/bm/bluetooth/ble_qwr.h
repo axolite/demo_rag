@@ -1,0 +1,236 @@
+/**
+ * Copyright (c) 2016 - 2025 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+/** @file
+ *
+ * @defgroup ble_qwr Queued Writes module
+ * @{
+ * @ingroup ble_sdk_lib
+ * @brief Module for handling Queued Write operations.
+ *
+ * @details This module handles prepare write, execute write, and cancel write
+ * commands. It also manages memory requests related to these operations.
+ */
+
+#ifndef BLE_QWR_H__
+#define BLE_QWR_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <ble.h>
+#include <bm/softdevice_handler/nrf_sdh_ble.h>
+
+/**
+ * @brief Macro for defining a ble_qwr instance.
+ *
+ * @param _name Name of the instance.
+ * @hideinitializer
+ */
+#define BLE_QWR_DEF(_name)                                                                         \
+	static struct ble_qwr _name;                                                               \
+	NRF_SDH_BLE_OBSERVER(_name##_obs, ble_qwr_on_ble_evt, &_name, HIGH)
+
+/* Error code used by the module to reject prepare write requests on non-registered attributes. */
+#define BLE_QWR_REJ_REQUEST_ERR_CODE BLE_GATT_STATUS_ATTERR_APP_BEGIN + 0
+
+/** @brief Queued Writes module event types. */
+enum ble_qwr_evt_type {
+	/** Event that indicates that an execute write command was received for a registered handle
+	 * and that the received data was actually written and is now ready.
+	 */
+	BLE_QWR_EVT_EXECUTE_WRITE,
+	/** Event that indicates that an execute write command was received for a registered handle
+	 * and that the write request must now be accepted or rejected.
+	 */
+	BLE_QWR_EVT_AUTH_REQUEST,
+	/** Error event */
+	BLE_QWR_EVT_ERROR,
+};
+
+/** @brief Queued Writes module events. */
+struct ble_qwr_evt {
+	/** Type of the event. */
+	enum ble_qwr_evt_type evt_type;
+	union {
+		/** @ref BLE_QWR_EVT_EXECUTE_WRITE event data. */
+		struct {
+			/** Handle of the attribute to which the event relates. */
+			uint16_t attr_handle;
+		} exec_write;
+		/** @ref BLE_QWR_EVT_AUTH_REQUEST event data. */
+		struct {
+			/** Handle of the attribute to which the event relates. */
+			uint16_t attr_handle;
+		} auth_req;
+		/** @ref BLE_QWR_EVT_ERROR event data. */
+		struct {
+			/** Error reason. */
+			uint32_t reason;
+		} error;
+	};
+};
+
+/* Forward declaration of the struct ble_qwr. */
+struct ble_qwr;
+
+/**
+ * @brief Queued Writes module event handler type.
+ *
+ * If the provided event is of type @ref BLE_QWR_EVT_AUTH_REQUEST,
+ * this function must accept or reject the execute write request by returning
+ * one of the @ref BLE_GATT_STATUS_CODES.
+ */
+typedef uint16_t (*ble_qwr_evt_handler_t)(struct ble_qwr *qwr, const struct ble_qwr_evt *evt);
+
+/**
+ * @brief Queued Writes structure.
+ * @details This structure contains status information for the Queued Writes module.
+ */
+struct ble_qwr {
+	/** Flag that indicates whether the module has been initialized. */
+	uint32_t initialized;
+	/** Event handler function that is called for events concerning the handles of all
+	 *  registered attributes.
+	 */
+	ble_qwr_evt_handler_t evt_handler;
+	/** Connection handle. */
+	uint16_t conn_handle;
+	/** Flag that indicates whether a mem_reply is pending
+	 *  (because a previous attempt returned busy).
+	 */
+	bool is_user_mem_reply_pending;
+#if (CONFIG_BLE_QWR_MAX_ATTR > 0)
+	/** List of handles for registered attributes, for which the module accepts and handles
+	 *  prepare write operations.
+	 */
+	uint16_t attr_handles[CONFIG_BLE_QWR_MAX_ATTR];
+	/** Number of registered attributes. */
+	uint8_t nb_registered_attr;
+	/** List of attribute handles that have been written to during the current prepare write or
+	 *  execute write operation.
+	 */
+	uint16_t written_attr_handles[CONFIG_BLE_QWR_MAX_ATTR];
+	/** Number of attributes that have been written to during the current prepare write or
+	 *  execute write operation.
+	 */
+	uint8_t nb_written_handles;
+	/** Memory buffer that is provided to the SoftDevice on an ON_USER_MEM_REQUEST event. */
+	ble_user_mem_block_t mem_buffer;
+#endif
+};
+
+/**
+ * @brief Queued Writes init structure.
+ *
+ * @details This structure contains all information needed to initialize the Queued Writes module.
+ */
+struct ble_qwr_config {
+	/** Event handler function that is called for events concerning the handles of all
+	 *  registered attributes.
+	 */
+	ble_qwr_evt_handler_t evt_handler;
+#if (CONFIG_BLE_QWR_MAX_ATTR > 0)
+	/** Memory buffer that is provided to the SoftDevice on an ON_USER_MEM_REQUEST event. */
+	ble_user_mem_block_t mem_buffer;
+#endif
+};
+
+/**
+ * @brief Function for initializing the Queued Writes module.
+ *
+ * @details Call this function in the main entry of your application to
+ * initialize the Queued Writes module. It must be called only once with a
+ * given Queued Writes structure.
+ *
+ * @param[out] qwr Queued Writes structure. This structure must be supplied by the application. It
+ *                 is initialized by this function and is later used to identify the particular
+ *                 Queued Writes instance.
+ * @param[in] qwr_config Configuration structure.
+ *
+ * @retval NRF_SUCCESS If the Queued Writes module was initialized successfully.
+ * @retval NRF_ERROR_NULL If @p qwr or @p qwr_init is @c NULL.
+ * @retval NRF_ERROR_INVALID_STATE If the given @p qwr instance has already been initialized.
+ */
+uint32_t ble_qwr_init(struct ble_qwr *qwr, const struct ble_qwr_config *qwr_config);
+
+/**
+ * @brief Function for assigning a connection handle to an instance of the Queued Writes module.
+ *
+ * @details Call this function when a link with a peer has been established to associate this link
+ *          to the instance of the module. This makes it possible to handle several links and
+ *          associate each link to a particular instance of this module.
+ *
+ * @param[in] qwr Queued Writes structure.
+ * @param[in] conn_handle Connection handle to be associated with the given Queued Writes instance.
+ *
+ * @retval NRF_SUCCESS If the assignment was successful.
+ * @retval NRF_ERROR_NULL If @p qwr is @c NULL.
+ * @retval NRF_ERROR_INVALID_STATE If the given @p qwr instance has not been initialized.
+ */
+uint32_t ble_qwr_conn_handle_assign(struct ble_qwr *qwr, uint16_t conn_handle);
+
+/**
+ * @brief Bluetooth LE event handler for the Queued Writes module.
+ *
+ * @details Handles all Bluetooth LE stack events that are of interest to the
+ *          Queued Writes module.
+ *
+ * @note This handler is registered automatically by @ref BLE_QWR_DEF and is
+ *       called by the SoftDevice handler. The application does not need to call
+ *       it directly.
+ *
+ * @param[in] ble_evt Bluetooth LE stack event.
+ * @param[in] ble_qwr Pointer to the @ref ble_qwr instance.
+ */
+void ble_qwr_on_ble_evt(const ble_evt_t *ble_evt, void *ble_qwr);
+
+#if (CONFIG_BLE_QWR_MAX_ATTR > 0)
+/**
+ * @brief Function for registering an attribute with the Queued Writes module.
+ *
+ * @details Call this function for each attribute that you want to enable for Queued Writes
+ *          (thus a series of prepare write and execute write operations).
+ *
+ * @param[in] qwr Queued Writes structure.
+ * @param[in] attr_handle Handle of the attribute to register.
+ *
+ * @retval NRF_SUCCESS If the registration was successful.
+ * @retval NRF_ERROR_NO_MEM If no more memory is available to add this registration.
+ * @retval NRF_ERROR_NULL If @p qwr is @c NULL.
+ * @retval NRF_ERROR_INVALID_STATE If the given @p qwr instance has not been initialized.
+ */
+uint32_t ble_qwr_attr_register(struct ble_qwr *qwr, uint16_t attr_handle);
+
+/**
+ * @brief Function for retrieving the received data for a given attribute.
+ *
+ * @details Call this function after receiving an @ref BLE_QWR_EVT_AUTH_REQUEST
+ * event to retrieve a linear copy of the data that was received for the given attribute.
+ *
+ * @param[in] qwr Queued Writes structure.
+ * @param[in] attr_handle Handle of the attribute.
+ * @param[out] mem Pointer to the application buffer where the received data will be copied.
+ * @param[in,out] len Input: length of the input buffer. Output: length of the received data.
+ *
+ * @retval NRF_SUCCESS If the data was retrieved and stored successfully.
+ * @retval NRF_ERROR_NO_MEM If the provided buffer was smaller than the received data.
+ * @retval NRF_ERROR_NULL If @p qwr, @p mem or @p len is @c NULL.
+ * @retval NRF_ERROR_INVALID_STATE If the given @p qwr instance has not been initialized.
+ */
+uint32_t ble_qwr_value_get(struct ble_qwr *qwr, uint16_t attr_handle, uint8_t *mem, uint16_t *len);
+#endif /* (CONFIG_BLE_QWR_MAX_ATTR > 0) */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* BLE_QWR_H__ */
+
+/** @} */

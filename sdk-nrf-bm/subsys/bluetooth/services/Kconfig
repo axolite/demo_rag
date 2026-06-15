@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2024 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+rsource "ble_bas/Kconfig"
+rsource "ble_bas_client/Kconfig"
+rsource "ble_bms/Kconfig"
+rsource "ble_cgms/Kconfig"
+rsource "ble_dis/Kconfig"
+rsource "ble_hids/Kconfig"
+rsource "ble_hrs/Kconfig"
+rsource "ble_hrs_client/Kconfig"
+rsource "ble_lbs/Kconfig"
+rsource "ble_nus/Kconfig"
+rsource "ble_nus_client/Kconfig"
+rsource "ble_mcumgr/Kconfig"

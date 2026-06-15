@@ -1,0 +1,13 @@
+#
+# Copyright (c) 2025 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "NFC for Bare Metal"
+
+rsource "ndef/Kconfig"
+rsource "t4t/Kconfig"
+rsource "lib/Kconfig"
+
+endmenu

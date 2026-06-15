@@ -1,0 +1,202 @@
+/*
+ * Copyright (c) 2015-2025 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+/**
+ * @file peer_manager_types.h
+ *
+ * @addtogroup peer_manager
+ * @brief File containing definitions used solely inside the Peer Manager's modules.
+ * @{
+ */
+
+#ifndef PEER_MANAGER_INTERNAL_H__
+#define PEER_MANAGER_INTERNAL_H__
+
+#include <stdint.h>
+#include <ble.h>
+#include <ble_gap.h>
+#include <bm/bluetooth/peer_manager/peer_manager_types.h>
+#include <zephyr/sys/util.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Max size of the data member in @ref pm_peer_data_local_gatt_db. */
+#define PM_PEER_DATA_LOCAL_GATT_DB_MAX_SIZE 128
+#define PM_PEER_DATA_MAX_SIZE PM_PEER_DATA_LOCAL_GATT_DB_MAX_SIZE
+
+/**
+ * @brief One piece of data associated with a peer, together with its type.
+ *
+ * @note This type is deprecated.
+ */
+struct pm_peer_data {
+	/** @brief Length of data in bytes. */
+	uint16_t length;
+	/**
+	 * @brief ID that specifies the type of data (defines which member of the union is
+	 *        used).
+	 */
+	enum pm_peer_data_id data_id;
+	/** @brief The data. */
+	union {
+		/** @brief The exchanged bond information in addition to metadata of the bonding. */
+		struct pm_peer_data_bonding *bonding_data;
+		/**
+		 * @brief A value locally assigned to this peer. Its
+		 *        interpretation is up to the user. The rank is not set
+		 *        automatically by the Peer Manager, but it is assigned by
+		 *        the user using either @ref pm_peer_rank_highest or a @ref
+		 *        PM_PEER_DATA_FUNCTIONS function.
+		 */
+		uint32_t *peer_rank;
+		/** @brief Value of peer's Central Address Resolution characteristic. */
+		uint32_t *central_addr_res;
+		/** @brief Whether a service changed indication should be sent to the peer. */
+		bool *service_changed_pending;
+		/** @brief Persistent information pertaining to a peer GATT client. */
+		struct pm_peer_data_local_gatt_db *local_gatt_db;
+		/** @brief Persistent information pertaining to a peer GATT server. */
+		struct ble_gatt_db_srv *remote_gatt_db;
+		/**
+		 * @brief Arbitrary data to associate with the peer. This data can be freely used
+		 *        by the application.
+		 */
+		uint8_t *application_data;
+		/**
+		 * @brief Generic access pointer to the data. It is used only to
+		 *        handle the data without regard to type.
+		 */
+		void *all_data;
+	};
+};
+
+/**
+ * @brief Immutable version of @ref pm_peer_data.
+ *
+ * @note This type is deprecated.
+ */
+struct pm_peer_data_const {
+	/** @brief Length of data in bytes. */
+	uint16_t length;
+	/**
+	 * @brief ID that specifies the type of data (defines which member of the union is
+	 *        used).
+	 */
+	enum pm_peer_data_id data_id;
+	/** @brief The data. */
+	union {
+		/** @brief Immutable @ref pm_peer_data::bonding_data. */
+		const struct pm_peer_data_bonding *bonding_data;
+		/** @brief Immutable @ref pm_peer_data::peer_rank. */
+		const uint32_t *peer_rank;
+		/** @brief Immutable @ref pm_peer_data::central_addr_res. */
+		const uint32_t *central_addr_res;
+		/** @brief Immutable @ref pm_peer_data::service_changed_pending. */
+		const bool *service_changed_pending;
+		/** @brief Immutable @ref pm_peer_data::local_gatt_db. */
+		const struct pm_peer_data_local_gatt_db *local_gatt_db;
+		/** @brief Immutable @ref pm_peer_data::remote_gatt_db. */
+		const struct ble_gatt_db_srv *remote_gatt_db;
+		/** @brief Immutable @ref pm_peer_data::application_data. */
+		const uint8_t *application_data;
+		/** @brief Immutable @ref pm_peer_data::all_data. */
+		const void *all_data;
+	};
+};
+
+/**
+ * @brief Event handler for events from the @ref peer_manager module.
+ *
+ * @sa pm_register
+ *
+ * @param[in]  event  The event that has occurred.
+ */
+typedef void (*pm_evt_handler_internal_t)(struct pm_evt *event);
+
+/** @brief Macro for showing that a variable is unused. */
+#define UNUSED_VARIABLE(X) ((void)(X))
+
+/** @brief The number of bytes in a word. */
+#define BYTES_PER_WORD (4)
+
+/**
+ * @brief Macro for calculating the number of words that are needed to hold a number of bytes.
+ *
+ * @param[in]  n_bytes  The number of bytes.
+ *
+ * @return The number of words needed to hold @p n_bytes bytes.
+ */
+#define BYTES_TO_WORDS(n_bytes) DIV_ROUND_UP((n_bytes), BYTES_PER_WORD)
+
+/**
+ * @brief Macro for calculating the flash size of bonding data.
+ *
+ * @return The number of words that the data takes in flash.
+ */
+#define PM_BONDING_DATA_N_WORDS() BYTES_TO_WORDS(sizeof(struct pm_peer_data_bonding))
+
+/**
+ * @brief Macro for calculating the flash size of service changed pending state.
+ *
+ * @return The number of words that the data takes in flash.
+ */
+#define PM_SC_STATE_N_WORDS() BYTES_TO_WORDS(sizeof(bool))
+
+/**
+ * @brief Macro for calculating the flash size of local GATT database data.
+ *
+ * @param[in]  local_db_len  The length, in bytes, of the database as reported by the SoftDevice.
+ *
+ * @return The number of words that the data takes in flash.
+ */
+#define PM_LOCAL_DB_N_WORDS(local_db_len)                                                          \
+	BYTES_TO_WORDS((local_db_len) + PM_LOCAL_DB_LEN_OVERHEAD_BYTES)
+
+/**
+ * @brief Macro for calculating the length of a local GATT database attribute array.
+ *
+ * @param[in]  n_words  The number of words that the data takes in flash.
+ *
+ * @return The length of the database attribute array.
+ */
+#define PM_LOCAL_DB_LEN(n_words) (((n_words)*BYTES_PER_WORD) - PM_LOCAL_DB_LEN_OVERHEAD_BYTES)
+
+/**
+ * @brief Macro for calculating the flash size of remote GATT database data.
+ *
+ * @param[in]  service_count  The number of services in the service array.
+ *
+ * @return The number of words that the data takes in flash.
+ */
+#define PM_REMOTE_DB_N_WORDS(service_count)                                                        \
+	BYTES_TO_WORDS(sizeof(struct ble_gatt_db_srv) * (service_count))
+
+/**
+ * @brief Macro for calculating the number of services that can be stored in a region of n words.
+ *
+ * @param[in]  n_words  The length in number of words.
+ *
+ * @return The number of services that can be stored in a region of n words.
+ */
+#define PM_REMOTE_DB_N_SERVICES(n_words)                                                           \
+	(((n_words)*BYTES_PER_WORD) / sizeof(struct ble_gatt_db_srv))
+
+/**
+ * @brief Function for calculating the flash size of the usage index.
+ *
+ * @return The number of words that the data takes in flash.
+ */
+#define PM_USAGE_INDEX_N_WORDS() BYTES_TO_WORDS(sizeof(uint32_t))
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* PEER_MANAGER_INTERNAL_H__ */
+
+/** @} */

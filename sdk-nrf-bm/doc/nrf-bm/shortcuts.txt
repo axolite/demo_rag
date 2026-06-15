@@ -1,0 +1,17 @@
+.. |BMlong| replace:: nRF Connect SDK Bare Metal option
+.. |BMshort| replace:: Bare Metal
+.. |NCS| replace:: nRF Connect SDK
+
+.. |VSC| replace:: Visual Studio Code
+.. |nRFVSC| replace:: nRF Connect for VS Code extension
+
+.. ### Versions
+
+.. |ncs_release| replace:: v3.3.0
+.. |release| replace:: v2.0.99
+
+.. ### Other shortcuts
+
+.. |nfc_nfct_driver_note| replace:: If you are using debug messages in the NFCT driver, the driver might not be working properly if you have :kconfig:option:`CONFIG_LOG_MODE_IMMEDIATE` enabled.
+   The NFCT driver is part of the nrfx driver package.
+   For more information about this driver, see the NFCT driver page in the `nrfx repository`_.
