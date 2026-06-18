@@ -1,0 +1,5 @@
+# Local virtualenv and Python caches — recreated by `uv run`.
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/

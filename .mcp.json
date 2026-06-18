@@ -17,6 +17,10 @@
     "mdn": {
       "type": "http",
       "url": "https://mcp.mdn.mozilla.net/"
+    },
+    "ncs-docs": {
+      "command": "uv",
+      "args": ["run", "--project", "ncs-docs-mcp", "ncs-docs-mcp", "ncs-docs-mcp/index.sqlite"]
     }
   }
 }

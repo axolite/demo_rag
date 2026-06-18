@@ -1,0 +1,2 @@
+# Prebuilt search index — binary, never diff or merge it (rebuild via build_index.py).
+*.sqlite binary -diff
