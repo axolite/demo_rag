@@ -7,7 +7,7 @@ local clone over fetching the live docs site.
 - Live docs (rendered): https://nrfconnectdocs.nordicsemi.com/ncs-bm/latest/nrf-bm/index.html
 - Source repo: https://github.com/nrfconnect/sdk-nrf-bm
 - Local clone: `sdk-nrf-bm/` — pinned at commit `894fa18` (2026-06-15)
-- Refresh with: `bash refresh-docs.sh`
+- Refresh with: `bash refresh-sdk-nrf-bm.sh`
 
 ## Where to look
 
