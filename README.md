@@ -16,21 +16,24 @@ by meaning — with citations back to the real source.
 
 | Path | What it is |
 |---|---|
-| **`ncs-docs-mcp/`** | The hybrid MCP documentation server — see below. Ships a prebuilt `index.sqlite`. |
+| **`sdk-docs-mcp/`** | The corpus-neutral hybrid MCP documentation engine — see below. Ships a prebuilt index per SDK (`ncs-1.6.1.sqlite`, `nrf-bm.sqlite`). |
 | `ncs-1.6.1-docs/` | Frozen ~125 MB Sphinx doc snapshot of NCS **v1.6.1** (`zephyr/ nrf/ mcuboot/ nrfxlib/ tfm/`), pinned by commit in `MANIFEST.md`. |
-| `sdk-nrf-bm/` | Local clone of `sdk-nrf-bm` (Bare Metal SDK) — the offline source of truth for headers, Kconfig, and samples. Pinned + refreshable. |
+| `sdk-nrf-bm/` | Local clone of `sdk-nrf-bm` (Bare Metal SDK) — the offline source of truth for headers, Kconfig, and samples, *and* the corpus behind the `bm-docs` server. Pinned + refreshable. |
 | `docs/` | The recommendation that led to the server (`ideas/docs-access-recommendation.md`) and the full build runbook (`ncs-docs-mcp-build-guide.md`). |
-| `.mcp.json` | Wires up `ncs-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
+| `.mcp.json` | Wires up `ncs-docs` and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
 | `sdk-nrf-bm.md` / `refresh-sdk-nrf-bm.sh` | Where to look in the Bare Metal clone, and how to refresh it. |
 
 ---
 
-## The centerpiece: `ncs-docs` — a hybrid documentation MCP server
+## The centerpiece: a hybrid documentation MCP engine
 
 The "thing that indexes the docs and turns them into something you can ask questions"
-is a **RAG-style hybrid retrieval server**. It fuses three signals out of one portable
-SQLite file so that both *exact-symbol* and *conceptual* queries work against the pinned
-corpus:
+is a **RAG-style hybrid retrieval engine**. One corpus-neutral engine builds a
+**separate index per SDK** and serves each through its own MCP instance — `ncs-docs`
+(NCS 1.6.1) and `bm-docs` (sdk-nrf-bm) — kept isolated so their `CONFIG_*`/API symbols
+and xref graphs never bleed across SDK boundaries. Each index fuses three signals out of
+one portable SQLite file so that both *exact-symbol* and *conceptual* queries work
+against its pinned corpus:
 
 | Signal | Store | Good at |
 |---|---|---|
@@ -43,8 +46,9 @@ is **pointer-first**: a search returns *locations* (repo / file / anchor / bread
 line range) plus a snippet, and the agent then reads the real RST for exactness — the
 best of grep-the-source and semantic search.
 
-**By the numbers:** 1,824 files → 15,176 sections → 10,555 cross-reference edges
-(6,245 resolved) → a single 67 MB `index.sqlite`.
+**By the numbers:** NCS 1.6.1 — 1,824 files → 15,176 sections → 10,555 cross-reference
+edges (6,245 resolved) → a 67 MB `ncs-1.6.1.sqlite`. sdk-nrf-bm — 195 files → 1,160
+sections → 1,006 edges (430 resolved) → an 8 MB `nrf-bm.sqlite`.
 
 ### Tools it exposes
 
@@ -59,25 +63,29 @@ best of grep-the-source and semantic search.
 
 ## Quick start
 
-The server is already registered in `.mcp.json`, so once you open this repo in Claude
-Code and reload MCP servers, the four tools are available — no setup, the index is
-committed.
+Both servers are already registered in `.mcp.json`, so once you open this repo in Claude
+Code and reload MCP servers, the four tools of each (`ncs-docs__…`, `bm-docs__…`) are
+available — no setup, the indexes are committed.
 
-To use it from the command line or rebuild it:
+To use them from the command line or rebuild an index:
 
 ```bash
-# Run the server (what .mcp.json does)
-uv run --project ncs-docs-mcp ncs-docs-mcp ncs-docs-mcp/index.sqlite
+# Run a server (what .mcp.json does) — one index per instance
+uv run --project sdk-docs-mcp sdk-docs-mcp sdk-docs-mcp/ncs-1.6.1.sqlite   # ncs-docs
+uv run --project sdk-docs-mcp sdk-docs-mcp sdk-docs-mcp/nrf-bm.sqlite      # bm-docs
 
-# Rebuild the index from the corpus (one-time ~45–50 min CPU embed;
-# first run downloads the ~640 MB embedding model once)
-uv run --project ncs-docs-mcp python ncs-docs-mcp/build_index.py
+# Rebuild an index from its corpus (--docs and --out are required; first run
+# downloads the ~640 MB embedding model once, then it's cached)
+uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
+    --docs ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1.sqlite
+uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
+    --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
 ```
 
-The index is **reproducible, not magic** — `build_index.py` walks the corpus, chunks
-each RST/MD file into sections, extracts the xref graph, embeds each section, and writes
-everything into `index.sqlite`. Because the corpus is frozen, this is a one-time cost
-with no staleness or re-indexing machinery.
+Each index is **reproducible, not magic** — `build_index.py` walks one `--docs` root,
+chunks each RST/MD file into sections, extracts the xref graph, embeds each section, and
+writes everything into the `--out` SQLite file. Because each corpus is frozen, this is a
+one-time cost with no staleness or re-indexing machinery.
 
 > The server opens the index read-only and resolves the docs root from a path stored in
 > the index's `meta` table, so it works from any clone.
@@ -93,4 +101,4 @@ with no staleness or re-indexing machinery.
 - **`docs/ideas/docs-access-recommendation.md`** — why a hybrid MCP server, and why the
   alternatives (agentic grep, bare vector DB, DeepWiki) each fall short for a pinned
   snapshot.
-- **`ncs-docs-mcp/README.md`** — the server's own reference.
+- **`sdk-docs-mcp/README.md`** — the engine's own reference (build, wiring, layout).

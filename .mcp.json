@@ -20,7 +20,11 @@
     },
     "ncs-docs": {
       "command": "uv",
-      "args": ["run", "--project", "ncs-docs-mcp", "ncs-docs-mcp", "ncs-docs-mcp/index.sqlite"]
+      "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1.sqlite"]
+    },
+    "bm-docs": {
+      "command": "uv",
+      "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/nrf-bm.sqlite"]
     }
   }
 }

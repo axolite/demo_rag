@@ -1,0 +1,22 @@
+[project]
+name = "sdk-docs-mcp"
+version = "0.1.0"
+description = "Hybrid (BM25 + dense vector + xref graph) MCP server over a Nordic/Zephyr SDK docs snapshot."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=2.0",
+    "fastembed>=0.8",
+    "sqlite-vec>=0.1.9",
+    "numpy>=1.26",
+]
+
+[project.scripts]
+sdk-docs-mcp = "sdk_docs_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sdk_docs_mcp"]
