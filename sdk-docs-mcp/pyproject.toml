@@ -9,6 +9,9 @@ dependencies = [
     "fastembed>=0.8",
     "sqlite-vec>=0.1.9",
     "numpy>=1.26",
+    # HTML ingestion of the resolved Sphinx build (build_index.py --format html).
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 ]
 
 [project.scripts]

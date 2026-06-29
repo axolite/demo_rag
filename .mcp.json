@@ -22,6 +22,10 @@
       "command": "uv",
       "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1.sqlite"]
     },
+    "ncs-docs-resolved": {
+      "command": "uv",
+      "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1-resolved.sqlite"]
+    },
     "bm-docs": {
       "command": "uv",
       "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/nrf-bm.sqlite"]

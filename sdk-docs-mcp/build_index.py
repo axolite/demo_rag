@@ -3,17 +3,30 @@
 
 One-time, deterministic build. Output is a single portable SQLite file holding
 four logical stores (sections / FTS5 / sqlite-vec / xref links) plus a meta
-table. The corpus is whatever ``--docs`` points at; the per-section ``repo``
-field is the first path component under that root. Run from anywhere, e.g.:
+table. Two ingest front-ends share one embed/write/meta tail:
 
-    uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
-        --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
+* ``--format rst`` (default) — the frozen RST/MD source snapshot. The corpus is
+  whatever ``--docs`` points at; the per-section ``repo`` is the first path
+  component under that root. E.g.::
+
+      uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
+          --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
+
+* ``--format html`` — the *resolved* Sphinx HTML build (real API signatures from
+  breathe). ``--docs`` is the ``_build/html`` tree; ``--source-root`` is the
+  committed snapshot, used both to map each rendered page back to its source
+  ``.rst`` (citations) and as the docs root the server serves. E.g.::
+
+      uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
+          --format html --docs /c/ncs-docbuild/out/_build/html \\
+          --source-root ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
 """
 
 from __future__ import annotations
 
 import argparse
 import posixpath
+import re
 import sqlite3
 import sys
 import time
@@ -24,9 +37,20 @@ import sqlite_vec
 sys.path.insert(0, str(Path(__file__).parent))
 from sdk_docs_mcp import EMBED_DIM, EMBED_MODEL, SCHEMA_VERSION  # noqa: E402
 from sdk_docs_mcp.chunker import Section, chunk_file, clean_for_embedding, extract_links  # noqa: E402
+from sdk_docs_mcp.html_chunker import chunk_html_file  # noqa: E402
 from sdk_docs_mcp.store import write_meta  # noqa: E402
 
 SKIP_DIR_PARTS = {"_build", "_doxygen", ".git", "__pycache__"}
+# HTML output dirs/files that carry no indexable doc content.
+SKIP_HTML_DIR_PARTS = {"_static", "_sources", "_images", "_downloads", "__pycache__"}
+SKIP_HTML_NAMES = {"genindex.html", "search.html", "py-modindex.html", "objects.inv"}
+
+# Docsets whose rendered pages map back to a folder in the source snapshot.
+# Generated (``kconfig``) and module-sourced (``nrfx`` ← modules/hal/nordic)
+# docsets have no snapshot ``.rst`` and cite their rendered page instead.
+DOCSET_TO_SNAPSHOT_TOP = {
+    "nrf": "nrf", "zephyr": "zephyr", "nrfxlib": "nrfxlib", "mcuboot": "mcuboot",
+}
 
 SCHEMA = """
 CREATE TABLE sections(
@@ -66,6 +90,11 @@ CREATE INDEX idx_links_resolved ON links(resolved_id);
 
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 """
+
+
+# --------------------------------------------------------------------------- #
+# RST ingest (the frozen source snapshot)
+# --------------------------------------------------------------------------- #
 
 
 def discover_files(docs_root: Path) -> list[tuple[Path, str, str]]:
@@ -113,25 +142,11 @@ def resolve_doc(target: str, src_path: str, doc_map: dict[str, int]) -> int | No
     return hits[0] if len(hits) == 1 else None
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--docs", type=Path, required=True,
-                    help="documentation root to index (e.g. ncs-1.6.1-docs, sdk-nrf-bm)")
-    ap.add_argument("--out", type=Path, required=True,
-                    help="output SQLite path (e.g. sdk-docs-mcp/nrf-bm.sqlite)")
-    ap.add_argument("--threads", type=int, default=None, help="ONNX threads")
-    args = ap.parse_args()
-
-    docs_root = args.docs.resolve()
-    out_path = args.out.resolve()
-    if not docs_root.is_dir():
-        ap.error(f"docs root not found: {docs_root}")
-
-    t0 = time.time()
+def ingest_rst(docs_root: Path) -> tuple[list[Section], list[tuple], list[str]]:
+    """Chunk + cross-reference the RST snapshot. Returns (sections, link_rows, embed_texts)."""
     files = discover_files(docs_root)
     print(f"[1/6] discovered {len(files)} doc files under {docs_root}")
 
-    # --- chunk -------------------------------------------------------------
     sections: list[Section] = []
     for path, repo, rel in files:
         sections.extend(chunk_file(path, repo, rel))
@@ -139,7 +154,6 @@ def main() -> int:
         sec.id = i  # type: ignore[attr-defined]
     print(f"[2/6] chunked into {len(sections)} sections")
 
-    # --- resolve cross-references -----------------------------------------
     anchor_map: dict[str, int] = {}
     for sec in sections:
         for a in sec.all_anchors:
@@ -159,12 +173,188 @@ def main() -> int:
     resolved_ct = sum(1 for r in link_rows if r[3] is not None)
     print(f"[3/6] extracted {len(link_rows)} xref edges ({resolved_ct} resolved)")
 
+    embed_texts = [clean_for_embedding(sec.text) for sec in sections]
+    return sections, link_rows, embed_texts
+
+
+# --------------------------------------------------------------------------- #
+# HTML ingest (the resolved Sphinx build)
+# --------------------------------------------------------------------------- #
+
+
+def discover_html_files(html_root: Path) -> list[tuple[Path, str, str]]:
+    """Return (abs_path, docset, page_docname) for every content .html page.
+
+    ``page_docname`` is the path under the HTML root without ``.html`` — the
+    docname Sphinx renders to, and the namespace we resolve xrefs in."""
+    out: list[tuple[Path, str, str]] = []
+    for path in sorted(html_root.rglob("*.html")):
+        rel = path.relative_to(html_root)
+        if SKIP_HTML_DIR_PARTS & set(rel.parts):
+            continue
+        if rel.name in SKIP_HTML_NAMES:
+            continue
+        docset = rel.parts[0]
+        out.append((path, docset, rel.with_suffix("").as_posix()))
+    return out
+
+
+class SnapshotIndex:
+    """Maps a rendered docname back to its source ``.rst`` in the snapshot.
+
+    The rendered output path *is* the Sphinx docname, but the snapshot stores
+    files at their full repo path (``nrf/doc/nrf/foo.rst``), so we suffix-match
+    the docset-relative tail against the snapshot — constrained to the docset's
+    top folder so same-named pages in other docsets can't collide."""
+
+    def __init__(self, source_root: Path):
+        self.root = source_root
+        self.by_top: dict[str, list[tuple[str, str]]] = {}  # top -> [(nosuffix, rel)]
+        self._lines: dict[str, list[str]] = {}
+        for path in sorted(source_root.rglob("*")):
+            if path.suffix.lower() not in (".rst", ".md"):
+                continue
+            rel = path.relative_to(source_root).as_posix()
+            top = rel.split("/", 1)[0]
+            self.by_top.setdefault(top, []).append((rel.rsplit(".", 1)[0], rel))
+
+    def match(self, docset: str, page_docname: str) -> str | None:
+        top = DOCSET_TO_SNAPSHOT_TOP.get(docset)
+        if not top or top not in self.by_top:
+            return None
+        tail = page_docname.split("/", 1)[1] if "/" in page_docname else page_docname
+        hits = [rel for nosuffix, rel in self.by_top[top]
+                if nosuffix == tail or nosuffix.endswith("/" + tail)]
+        return hits[0] if len(hits) == 1 else None
+
+    def anchor_line(self, rel: str, anchor: str) -> int:
+        """1-based line of ``.. _anchor:`` in the matched source, else 0."""
+        if not anchor:
+            return 0
+        lines = self._lines.get(rel)
+        if lines is None:
+            try:
+                lines = (self.root / rel).read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                lines = []
+            self._lines[rel] = lines
+        # An explicit label may be rendered as a hyphenated id (and vice versa).
+        cands = {anchor, anchor.replace("-", "_"), anchor.replace("_", "-")}
+        pat = re.compile(r"^\.\.\s+_(" + "|".join(re.escape(c) for c in cands) + r"):\s*$")
+        for i, line in enumerate(lines, start=1):
+            if pat.match(line):
+                return i
+        return 0
+
+
+def build_html_maps(sections: list[Section]) -> tuple[dict[str, int], dict[str, int]]:
+    """(anchor_map, doc_map) for resolving HTML xrefs.
+
+    ``anchor_map`` keys both ``docname#frag`` (precise) and bare ``frag``
+    (cross-page fallback); ``doc_map`` keys ``docname`` -> first section."""
+    anchor_map: dict[str, int] = {}
+    doc_map: dict[str, int] = {}
+    for sec in sections:
+        dn = getattr(sec, "docname", "")
+        if dn:
+            doc_map.setdefault(dn, sec.id)  # type: ignore[attr-defined]
+        for a in sec.all_anchors:
+            anchor_map.setdefault(f"{dn}#{a}", sec.id)  # type: ignore[attr-defined]
+            anchor_map.setdefault(a, sec.id)  # type: ignore[attr-defined]
+    return anchor_map, doc_map
+
+
+def resolve_html_edge(target: str, anchor_map: dict[str, int], doc_map: dict[str, int]) -> int | None:
+    if "#" in target:
+        dn, frag = target.split("#", 1)
+        if frag:
+            return anchor_map.get(f"{dn}#{frag}") or anchor_map.get(frag)
+        return doc_map.get(dn)
+    return doc_map.get(target)
+
+
+def ingest_html(html_root: Path, source_root: Path) -> tuple[list[Section], list[tuple], list[str]]:
+    """Chunk the resolved HTML, map citations to source, resolve xrefs."""
+    files = discover_html_files(html_root)
+    print(f"[1/6] discovered {len(files)} HTML pages under {html_root}")
+    snap = SnapshotIndex(source_root)
+
+    sections: list[Section] = []
+    mapped_files = 0
+    for path, docset, page_docname in files:
+        html = path.read_text(encoding="utf-8", errors="replace")
+        secs = chunk_html_file(html, docset, page_docname)
+        src_rel = snap.match(docset, page_docname)
+        if src_rel:
+            mapped_files += 1
+            repo = src_rel.split("/", 1)[0]
+            for s in secs:
+                s.repo = repo
+                s.file_path = src_rel
+                s.line_start = s.line_end = snap.anchor_line(src_rel, s.anchor)
+        sections.extend(secs)
+    for i, sec in enumerate(sections, start=1):
+        sec.id = i  # type: ignore[attr-defined]
+    print(f"[2/6] chunked into {len(sections)} sections "
+          f"({mapped_files}/{len(files)} pages mapped to source .rst)")
+
+    anchor_map, doc_map = build_html_maps(sections)
+    link_rows: list[tuple[int, str, str, int | None]] = []
+    for sec in sections:
+        for target in getattr(sec, "raw_links", []):
+            resolved = resolve_html_edge(target, anchor_map, doc_map)
+            link_rows.append((sec.id, "ref", target, resolved))  # type: ignore[attr-defined]
+    resolved_ct = sum(1 for r in link_rows if r[3] is not None)
+    print(f"[3/6] extracted {len(link_rows)} xref edges ({resolved_ct} resolved)")
+
+    # HTML text is already plain prose; the embedder caps length itself.
+    embed_texts = [sec.text for sec in sections]
+    return sections, link_rows, embed_texts
+
+
+# --------------------------------------------------------------------------- #
+# Shared tail: embed -> write -> meta
+# --------------------------------------------------------------------------- #
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--docs", type=Path, required=True,
+                    help="root to index: an RST snapshot, or a _build/html tree for --format html")
+    ap.add_argument("--out", type=Path, required=True,
+                    help="output SQLite path (e.g. sdk-docs-mcp/ncs-1.6.1-resolved.sqlite)")
+    ap.add_argument("--format", choices=("rst", "html"), default="rst",
+                    help="source format: rst snapshot (default) or resolved Sphinx html")
+    ap.add_argument("--source-root", type=Path, default=None,
+                    help="snapshot used for html citation mapping + as the served docs root "
+                         "(required with --format html)")
+    ap.add_argument("--threads", type=int, default=None, help="ONNX threads")
+    args = ap.parse_args()
+
+    docs_root = args.docs.resolve()
+    out_path = args.out.resolve()
+    if not docs_root.is_dir():
+        ap.error(f"docs root not found: {docs_root}")
+
+    t0 = time.time()
+    if args.format == "html":
+        if args.source_root is None:
+            ap.error("--source-root is required with --format html")
+        source_root = args.source_root.resolve()
+        if not source_root.is_dir():
+            ap.error(f"source root not found: {source_root}")
+        sections, link_rows, embed_texts = ingest_html(docs_root, source_root)
+        meta_root = source_root  # get_doc serves source RST for provenance
+    else:
+        sections, link_rows, embed_texts = ingest_rst(docs_root)
+        meta_root = docs_root
+
     # --- embed -------------------------------------------------------------
     from sdk_docs_mcp.embed import Embedder, to_blob
 
     print(f"[4/6] embedding with {EMBED_MODEL} (first run downloads the model)…")
     embedder = Embedder(threads=args.threads)
-    embed_texts = [clean_for_embedding(sec.text) for sec in sections]
     vectors: list[bytes] = []
     done = 0
     for vec in embedder.embed_documents(embed_texts):
@@ -203,15 +393,24 @@ def main() -> int:
         link_rows,
     )
 
-    docs_root_rel = posixpath.relpath(docs_root.as_posix(), out_path.parent.as_posix())
-    write_meta(db, {
+    docs_root_rel = posixpath.relpath(meta_root.as_posix(), out_path.parent.as_posix())
+    meta = {
         "schema_version": str(SCHEMA_VERSION),
         "embed_model": EMBED_MODEL,
         "embed_dim": str(EMBED_DIM),
         "docs_root_relative": docs_root_rel,
         "section_count": str(len(sections)),
         "link_count": str(len(link_rows)),
-    })
+        "source_format": args.format,
+    }
+    if args.format == "html":
+        meta["build_note"] = (
+            "Resolved Sphinx HTML built from the NCS v1.6.1 manifest pins (fresh "
+            "west clone); citations map each rendered page back to the source .rst "
+            "in docs_root_relative. kconfig/nrfx have no snapshot source and cite "
+            "their rendered page."
+        )
+    write_meta(db, meta)
 
     db.commit()
     db.execute("VACUUM")

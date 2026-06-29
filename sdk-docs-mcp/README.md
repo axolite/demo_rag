@@ -6,12 +6,18 @@ MCP surfaces stay isolated on purpose (developers never mix SDKs in one project,
 and merging corpora would pollute BM25/RRF ranking, collide same-named
 `CONFIG_*`/API symbols, and bleed the xref graph across SDK boundaries).
 
-Two indexes ship today, served by two server instances:
+Indexes are served by one server instance each:
 
 | Server key | Index | Corpus |
 |---|---|---|
-| `ncs-docs` | `ncs-1.6.1.sqlite` | frozen **NCS 1.6.1** snapshot (`../ncs-1.6.1-docs/`) — DeepWiki tracks upstream `sdk-nrf`, not 1.6.1 |
+| `ncs-docs` | `ncs-1.6.1.sqlite` | frozen **NCS 1.6.1** RST snapshot (`../ncs-1.6.1-docs/`) — DeepWiki tracks upstream `sdk-nrf`, not 1.6.1 |
+| `ncs-docs-resolved` | `ncs-1.6.1-resolved.sqlite` | the **resolved** Sphinx HTML build of NCS 1.6.1 — real API signatures the RST stubs lack; citations still point back to the snapshot. Built via the runbook (`../docs/build-ncs-1.6.1-doc.md`). |
 | `bm-docs`  | `nrf-bm.sqlite`    | **sdk-nrf-bm** (nRF Baremetal) repo (`../sdk-nrf-bm/`) |
+
+`ncs-docs` and `ncs-docs-resolved` are complementary, not redundant: the RST
+index is the source of truth for prose and is always present; the resolved index
+adds the doxygen/breathe API surface (function signatures, struct fields) that
+exists only after a real Sphinx build.
 
 Each index fuses three retrieval signals so both exact-symbol and conceptual
 queries work against its *pinned* corpus:
@@ -52,11 +58,26 @@ uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
 # sdk-nrf-bm (baremetal)
 uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
     --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
+
+# NCS 1.6.1 RESOLVED — ingest a built Sphinx HTML tree instead of RST.
+# --source-root is the snapshot used for citations + served as the docs root.
+uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
+    --format html --docs /c/ncs-docbuild/out/_build/html \
+    --source-root ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
 ```
 
-The per-section `repo` field is the first path component under `--docs`. The
-first build downloads the embedding model (~640 MB) once via `fastembed`;
-subsequent builds reuse the cache. Extra option: `--threads <n>`.
+The per-section `repo` field is the first path component under `--docs` (RST) or
+the matched snapshot path (HTML). The first build downloads the embedding model
+(~640 MB) once via `fastembed`; subsequent builds reuse the cache. Extra option:
+`--threads <n>`.
+
+`--format html` parses the resolved Sphinx output (`html_chunker.py`): one
+section per Sphinx section node, breathe API blocks (`<dl class="c function">`)
+kept in the text and their `dt[id]` recorded as anchors, internal `<a
+class="reference">` links resolved to concrete neighbours, and each rendered page
+mapped back to its source `.rst` for citations (unique-suffix match per docset;
+generated `kconfig`/`nrfx` cite the rendered page). See the runbook for the full
+Docker build that produces the HTML.
 
 ## Run / wire up
 
@@ -67,6 +88,10 @@ index files:
 "ncs-docs": {
   "command": "uv",
   "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1.sqlite"]
+},
+"ncs-docs-resolved": {
+  "command": "uv",
+  "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1-resolved.sqlite"]
 },
 "bm-docs": {
   "command": "uv",
@@ -81,12 +106,15 @@ clone. The embedding model loads lazily on the first semantic/hybrid query.
 ## Layout
 
 ```
-build_index.py        corpus -> <name>.sqlite (one-time, per SDK)
+build_index.py            corpus -> <name>.sqlite (ingest_rst | ingest_html, shared embed/write tail)
 sdk_docs_mcp/
-  chunker.py          RST/MD section splitter + xref extractor (corpus-neutral)
-  embed.py            fastembed wrapper (model pinned)
-  store.py            meta helpers + open_corpus() (shared read/write seam)
-  server.py           FastMCP server: 4 tools + RRF
-ncs-1.6.1.sqlite      committed prebuilt NCS index
-nrf-bm.sqlite         committed prebuilt baremetal index
+  chunker.py              RST/MD section splitter + xref extractor (corpus-neutral)
+  html_chunker.py         resolved-Sphinx-HTML section splitter + xref extractor
+  embed.py                fastembed wrapper (model pinned)
+  store.py                meta helpers + open_corpus() (shared read/write seam)
+  server.py               FastMCP server: 4 tools + RRF
+tests/test_html_chunker.py  end-to-end checks for the --format html path
+ncs-1.6.1.sqlite          committed prebuilt NCS RST index
+ncs-1.6.1-resolved.sqlite committed prebuilt NCS resolved (HTML) index
+nrf-bm.sqlite             committed prebuilt baremetal index
 ```

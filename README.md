@@ -16,11 +16,12 @@ by meaning — with citations back to the real source.
 
 | Path | What it is |
 |---|---|
-| **`sdk-docs-mcp/`** | The corpus-neutral hybrid MCP documentation engine — see below. Ships a prebuilt index per SDK (`ncs-1.6.1.sqlite`, `nrf-bm.sqlite`). |
+| **`sdk-docs-mcp/`** | The corpus-neutral hybrid MCP documentation engine — see below. Ships a prebuilt index per corpus (`ncs-1.6.1.sqlite`, `ncs-1.6.1-resolved.sqlite`, `nrf-bm.sqlite`). |
 | `ncs-1.6.1-docs/` | Frozen ~125 MB Sphinx doc snapshot of NCS **v1.6.1** (`zephyr/ nrf/ mcuboot/ nrfxlib/ tfm/`), pinned by commit in `MANIFEST.md`. |
+| `docker/` | Pinned toolchain image + west-clone build script that render the snapshot into **resolved HTML** (real API reference), the input to `ncs-1.6.1-resolved.sqlite`. See `docs/build-ncs-1.6.1-doc.md`. |
 | `sdk-nrf-bm/` | Local clone of `sdk-nrf-bm` (Bare Metal SDK) — the offline source of truth for headers, Kconfig, and samples, *and* the corpus behind the `bm-docs` server. Pinned + refreshable. |
 | `docs/` | The recommendation that led to the server (`ideas/docs-access-recommendation.md`) and the full build runbook (`ncs-docs-mcp-build-guide.md`). |
-| `.mcp.json` | Wires up `ncs-docs` and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
+| `.mcp.json` | Wires up `ncs-docs`, `ncs-docs-resolved`, and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
 | `sdk-nrf-bm.md` / `refresh-sdk-nrf-bm.sh` | Where to look in the Bare Metal clone, and how to refresh it. |
 
 ---
@@ -49,6 +50,15 @@ best of grep-the-source and semantic search.
 **By the numbers:** NCS 1.6.1 — 1,824 files → 15,176 sections → 10,555 cross-reference
 edges (6,245 resolved) → a 67 MB `ncs-1.6.1.sqlite`. sdk-nrf-bm — 195 files → 1,160
 sections → 1,006 edges (430 resolved) → an 8 MB `nrf-bm.sqlite`.
+
+**RST vs. resolved.** The NCS 1.6.1 RST snapshot is strong on prose but ~18% of its
+files are doxygen *stub* pages — the real API reference (function signatures, struct
+fields) is injected only by a Sphinx + breathe build. So a second index,
+`ncs-1.6.1-resolved.sqlite` (served as `ncs-docs-resolved`), is built from the
+**resolved HTML** and sits alongside the RST `ncs-docs`: same four tools, but it can
+answer exact-API questions the stubs can't, while citations still point back to the
+source `.rst`. Producing it is a one-time Docker build documented in
+`docs/build-ncs-1.6.1-doc.md`.
 
 ### Tools it exposes
 
@@ -98,6 +108,9 @@ one-time cost with no staleness or re-indexing machinery.
   schema, chunking, the cross-reference graph, the embedding memory cliff (and the
   192 GB crash that motivated the fix), RRF, wiring, distribution, and verification.
   Read this to rebuild it — or rebuild it *differently* for another corpus.
+- **`docs/build-ncs-1.6.1-doc.md`** — how the **resolved** index is produced: the
+  pinned-toolchain Docker build that west-clones NCS v1.6.1 and renders the real
+  API reference, then ingests that HTML (`--format html`) into `ncs-1.6.1-resolved.sqlite`.
 - **`docs/ideas/docs-access-recommendation.md`** — why a hybrid MCP server, and why the
   alternatives (agentic grep, bare vector DB, DeepWiki) each fall short for a pinned
   snapshot.

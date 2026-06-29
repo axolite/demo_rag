@@ -1,0 +1,10 @@
+# Pinned Python dependency lockfile for the NCS v1.6.1 doc build (two-phase repro).
+#
+# Empty on purpose until the first successful build. build-docs.sh ignores an
+# empty file and resolves the 2021 requirement pins live; it writes the exact
+# resolved set to /out/pip-freeze.txt. Copy that here to make every later build
+# byte-stable:
+#
+#     cp /c/ncs-docbuild/out/pip-freeze.txt docker/constraints.txt
+#
+# Then re-run build-docs.sh and it installs with `-c constraints.txt`.
