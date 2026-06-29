@@ -1,5 +1,15 @@
 # Building a Hybrid Docs MCP Server — Build Guide & Field Notes
 
+> **Historical (retained for reference).** This runbook documents the *original*
+> RST-only `ncs-docs` index. Since then the project was renamed `ncs-docs-mcp/` →
+> **`sdk-docs-mcp/`**, the standalone RST `ncs-docs` index has been **retired**, and
+> the system has grown into a unified knowledge base that additionally (1) ingests
+> the **resolved HTML** docs (real API reference — see `docs/build-ncs-1.6.1-doc.md`),
+> (2) ingests the NCS **source code** alongside the RST, and (3) **combines** these
+> into one federated, searchable entity. The schema / chunking / xref / RRF /
+> embedding field notes below remain accurate for the shared engine; only the
+> `ncs-docs-mcp/` paths and the single-RST-index wiring are superseded.
+
 **What this is.** A complete, self-contained record of how the `ncs-docs` MCP
 server was built, so it can be rebuilt (or rebuilt *differently*, for another
 corpus) from scratch with no prior context. It is a **runbook** first — do these

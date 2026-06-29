@@ -4,6 +4,13 @@
 **Scope:** How best to expose `ncs-1.6.1-docs/` to Claude Code (and other LLM tools) for querying.
 **Status:** Recommendation only — nothing in the repo was modified to produce this.
 
+> **Historical (retained for reference).** This is the original recommendation that
+> led to the hybrid MCP server. The implementation has since gone further than the
+> single RST index proposed here: it now also indexes the **resolved HTML** docs and
+> the NCS **source code**, and **combines** them into one federated searchable
+> entity. The rationale below — why hybrid retrieval beats agentic grep, a bare
+> vector DB, or DeepWiki for a pinned snapshot — still holds.
+
 ---
 
 ## 1. Findings — what's actually in the repo

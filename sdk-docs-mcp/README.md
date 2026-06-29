@@ -10,14 +10,15 @@ Indexes are served by one server instance each:
 
 | Server key | Index | Corpus |
 |---|---|---|
-| `ncs-docs` | `ncs-1.6.1.sqlite` | frozen **NCS 1.6.1** RST snapshot (`../ncs-1.6.1-docs/`) — DeepWiki tracks upstream `sdk-nrf`, not 1.6.1 |
-| `ncs-docs-resolved` | `ncs-1.6.1-resolved.sqlite` | the **resolved** Sphinx HTML build of NCS 1.6.1 — real API signatures the RST stubs lack; citations still point back to the snapshot. Built via the runbook (`../docs/build-ncs-1.6.1-doc.md`). |
+| `ncs-docs-resolved` | `ncs-1.6.1-resolved.sqlite` | the **resolved** Sphinx HTML build of NCS 1.6.1 — real API signatures the RST stubs lack; citations point back to the snapshot. Built via the runbook (`../docs/build-ncs-1.6.1-doc.md`). |
 | `bm-docs`  | `nrf-bm.sqlite`    | **sdk-nrf-bm** (nRF Baremetal) repo (`../sdk-nrf-bm/`) |
 
-`ncs-docs` and `ncs-docs-resolved` are complementary, not redundant: the RST
-index is the source of truth for prose and is always present; the resolved index
-adds the doxygen/breathe API surface (function signatures, struct fields) that
-exists only after a real Sphinx build.
+The standalone RST-only `ncs-docs` index has been **retired**. Its RST snapshot is
+being folded into a **unified source-code + RST** index (built with the
+`--format`/`--code-root` path), which together with the resolved-HTML index forms two
+complementary NCS knowledge bases: the resolved index carries the *rendered* API
+surface (doxygen/breathe signatures), the unified index carries the prose **and** the
+real C/Kconfig source it's drawn from.
 
 Each index fuses three retrieval signals so both exact-symbol and conceptual
 queries work against its *pinned* corpus:
@@ -51,10 +52,6 @@ from one `--docs` root; `--docs` and `--out` are required. Use `python -u` so th
 6-stage progress isn't swallowed by block buffering on a redirected stdout:
 
 ```bash
-# NCS 1.6.1
-uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
-    --docs ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1.sqlite
-
 # sdk-nrf-bm (baremetal)
 uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
     --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
@@ -81,14 +78,10 @@ Docker build that produces the HTML.
 
 ## Run / wire up
 
-Registered in the repo's `.mcp.json` — two instances, one engine, different
-index files:
+Registered in the repo's `.mcp.json` — one engine, different index files per
+instance:
 
 ```jsonc
-"ncs-docs": {
-  "command": "uv",
-  "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1.sqlite"]
-},
 "ncs-docs-resolved": {
   "command": "uv",
   "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp", "sdk-docs-mcp/ncs-1.6.1-resolved.sqlite"]
@@ -114,7 +107,6 @@ sdk_docs_mcp/
   store.py                meta helpers + open_corpus() (shared read/write seam)
   server.py               FastMCP server: 4 tools + RRF
 tests/test_html_chunker.py  end-to-end checks for the --format html path
-ncs-1.6.1.sqlite          committed prebuilt NCS RST index
-ncs-1.6.1-resolved.sqlite committed prebuilt NCS resolved (HTML) index
+ncs-1.6.1-resolved.sqlite NCS resolved (HTML) index — built locally per the runbook
 nrf-bm.sqlite             committed prebuilt baremetal index
 ```
