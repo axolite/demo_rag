@@ -185,7 +185,8 @@ for k in ("section_count", "link_count", "source_format", "docs_root_relative"):
     } catch { Write-Warning "Could not read index meta: $_" }
     Write-Host ''
     Write-Host "Next: reload MCP servers in Claude Code, then verify per docs/build-ncs-1.6.1-doc.md."
-    Write-Host "      To commit the artifact:  git add $indexPath ; git commit -m 'Add resolved NCS 1.6.1 index'"
+    Write-Host "      This index is built locally, not committed (it cites the machine-local west"
+    Write-Host "      clone, so a committed copy wouldn't be portable) - rebuild it, don't commit it."
 } else {
     throw "Index build reported success but $indexPath is missing."
 }

@@ -4,7 +4,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 
-# The unified source-truth index (~0.8–1.1 GB) is built locally, not committed:
-# it's large and resolves get_doc against the machine-local west clone, so a
-# committed copy wouldn't be portable anyway. Rebuild it per the runbook.
+# The NCS v1.6.1 indexes are built locally, not committed: both resolve get_doc
+# against the machine-local west clone (so a committed copy wouldn't be portable),
+# and KB2 is large (~0.8–1.1 GB). Rebuild them per the runbook. nrf-bm.sqlite is
+# the exception — it's small and self-contained, so it stays committed.
+ncs-1.6.1-resolved.sqlite
 ncs-1.6.1-source.sqlite
