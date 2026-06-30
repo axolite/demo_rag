@@ -1,10 +1,17 @@
 # Pinned Python dependency lockfile for the NCS v1.6.1 doc build (two-phase repro).
 #
-# Empty on purpose until the first successful build. build-docs.sh ignores an
-# empty file and resolves the 2021 requirement pins live; it writes the exact
-# resolved set to /out/pip-freeze.txt. Copy that here to make every later build
-# byte-stable:
+# Ideally this is the exact pip-freeze of the first good build (see below). Until
+# then it carries the MINIMAL interim caps the 2021 doc toolchain needs to build
+# under a modern pip: the requirement files pin sphinx==3.5.4 but leave its
+# Jinja2/MarkupSafe deps loose, and unconstrained they resolve to current releases
+# that dropped APIs Sphinx 3.5 imports (jinja2.environmentfilter removed in 3.1;
+# markupsafe.soft_unicode removed in 2.1). Cap them to the 3.0/2.0 line that
+# matches the mid-2021 NCS v1.6.1 build.
+#
+# After the first successful build, replace this whole file with the captured
+# freeze to make every later build byte-stable:
 #
 #     cp /c/ncs-docbuild/out/pip-freeze.txt docker/constraints.txt
 #
-# Then re-run build-docs.sh and it installs with `-c constraints.txt`.
+Jinja2<3.1
+MarkupSafe<2.1
