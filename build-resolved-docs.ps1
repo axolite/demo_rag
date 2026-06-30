@@ -135,7 +135,7 @@ if ($SkipDocsBuild) {
 }
 
 # Sanity: a former doxygen stub should now carry real signatures.
-$stub = Join-Path $htmlRoot 'nrf\security\secure_services.html'
+$stub = Join-Path $htmlRoot 'nrf\include\secure_services.html'
 if (Test-Path $stub) {
     if (Select-String -Path $stub -Pattern 'spm_request' -Quiet) {
         Write-Host "==> Verified: resolved API signatures present in secure_services.html" -ForegroundColor Green

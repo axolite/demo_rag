@@ -118,7 +118,7 @@ is non-fatal to the goal.
 
 ### A3. Verify the HTML is actually resolved
 
-- Open `/out/_build/html/nrf/security/secure_services.html` (a former stub). Its
+- Open `/out/_build/html/nrf/include/secure_services.html` (a former stub). Its
   *API documentation* section must now contain real signatures (`spm_request_*`),
   not just prose.
 - Confirm `_sources/` exists under each docset (the theme sets
