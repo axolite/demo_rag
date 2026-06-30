@@ -57,14 +57,14 @@ uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
     --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
 
 # NCS 1.6.1 RESOLVED — ingest a built Sphinx HTML tree instead of RST.
-# --source-root is the snapshot used for citations + served as the docs root.
+# --source-root is the west clone the HTML was built from: citation source + docs root.
 uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
     --format html --docs /c/ncs-docbuild/out/_build/html \
-    --source-root ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
+    --source-root /c/ncs-docbuild/src --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
 ```
 
 The per-section `repo` field is the first path component under `--docs` (RST) or
-the matched snapshot path (HTML). The first build downloads the embedding model
+the docset label (HTML). The first build downloads the embedding model
 (~640 MB) once via `fastembed`; subsequent builds reuse the cache. Extra option:
 `--threads <n>`.
 

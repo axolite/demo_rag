@@ -7,10 +7,10 @@
 #   /out   (rw)  — build output: _build/, pip-freeze.txt      (host scratch)
 #
 # Why clone fresh instead of mounting the local workspace: west checks out every
-# project at the EXACT commit the v1.6.1 manifest pins — the same commits the
-# committed `ncs-1.6.1-docs/` snapshot was extracted from — so the rendered HTML
-# matches the snapshot line-for-line and citations are exact for every docset
-# (zephyr included). It also removes any dependence on local workspace state.
+# project at the EXACT commit the v1.6.1 manifest pins, so the rendered HTML is
+# commit-exact and the SAME clone (/src) is the citation source the index maps
+# back to (get_doc reads its .rst/.c straight from here). It also removes any
+# dependence on local workspace state.
 set -euo pipefail
 
 SRC=${SRC:-/src}

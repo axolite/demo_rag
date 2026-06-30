@@ -2,9 +2,10 @@
 """Self-contained checks for the resolved-HTML ingest path.
 
 No external fixtures: builds a tiny Sphinx-3.3-style ``_build/html`` tree and a
-matching source snapshot in a temp dir, then exercises ``chunk_html_file`` and
-``build_index.ingest_html`` end-to-end (everything *before* embedding, which is
-format-agnostic and already proven by the shipped indexes).
+matching west-clone source tree (incl. the ``bootloader/mcuboot`` layout) in a
+temp dir, then exercises ``chunk_html_file`` and ``build_index.ingest_html``
+end-to-end (everything *before* embedding, which is format-agnostic and already
+proven by the shipped indexes).
 
 Run:  uv run --project sdk-docs-mcp python sdk-docs-mcp/tests/test_html_chunker.py
 """
@@ -52,7 +53,15 @@ SPM_HTML = """<!DOCTYPE html>
 KCONFIG_HTML = """<!DOCTYPE html>
 <html><head><title>CONFIG_FOO</title></head><body><div role="main">
   <div class="section" id="cmdoption-config-foo"><h1>CONFIG_FOO</h1>
-  <p>A generated Kconfig option with no source .rst in the snapshot.</p></div>
+  <p>A generated Kconfig option with no source .rst in the clone.</p></div>
+</div></body></html>"""
+
+# mcuboot's docset maps to bootloader/mcuboot/ in the west clone (not a top-level
+# mcuboot/ as in the old snapshot) — exercises DOCSET_TO_SOURCE_TOP.
+MCUBOOT_HTML = """<!DOCTYPE html>
+<html><head><title>Design</title></head><body><div role="main">
+  <div class="section" id="mcuboot-design"><h1>MCUboot Design</h1>
+  <p>How the bootloader validates images.</p></div>
 </div></body></html>"""
 
 SECURE_SERVICES_RST = """.. _secure_services:
@@ -111,25 +120,34 @@ def test_ingest_html() -> None:
         html = base / "_build" / "html"
         (html / "nrf" / "security").mkdir(parents=True)
         (html / "kconfig").mkdir(parents=True)
+        (html / "mcuboot").mkdir(parents=True)
         (html / "nrf" / "security" / "secure_services.html").write_text(SECURE_SERVICES_HTML, encoding="utf-8")
         (html / "nrf" / "spm.html").write_text(SPM_HTML, encoding="utf-8")
         (html / "kconfig" / "index.html").write_text(KCONFIG_HTML, encoding="utf-8")
+        (html / "mcuboot" / "design.html").write_text(MCUBOOT_HTML, encoding="utf-8")
 
-        snap = base / "snapshot"
-        rst = snap / "nrf" / "doc" / "nrf" / "security" / "secure_services.rst"
+        clone = base / "clone"
+        rst = clone / "nrf" / "doc" / "nrf" / "security" / "secure_services.rst"
         rst.parent.mkdir(parents=True)
         rst.write_text(SECURE_SERVICES_RST, encoding="utf-8")
-        (snap / "nrf" / "doc" / "nrf" / "spm.rst").write_text("SPM\n===\n", encoding="utf-8")
+        (clone / "nrf" / "doc" / "nrf" / "spm.rst").write_text("SPM\n===\n", encoding="utf-8")
+        mb_src = clone / "bootloader" / "mcuboot" / "docs" / "design.md"
+        mb_src.parent.mkdir(parents=True)
+        mb_src.write_text("# MCUboot Design\n", encoding="utf-8")
 
-        sections, link_rows, embed_texts = build_index.ingest_html(html, snap)
+        sections, link_rows, embed_texts = build_index.ingest_html(html, clone)
         by_anchor = {s.anchor: s for s in sections}
 
         ss = by_anchor["secure-services"]
-        check(ss.repo == "nrf", "mapped section repo = snapshot top")
+        check(ss.repo == "nrf", "mapped section repo = docset label")
         check(ss.file_path == "nrf/doc/nrf/security/secure_services.rst",
-              f"docname suffix-matched to snapshot .rst (got {ss.file_path})")
+              f"docname suffix-matched to clone .rst (got {ss.file_path})")
         check(ss.line_start == 1,
               f"anchor line resolved via _-/-swap (.. _secure_services: at L1, got {ss.line_start})")
+
+        mb = by_anchor["mcuboot-design"]
+        check(mb.repo == "mcuboot" and mb.file_path == "bootloader/mcuboot/docs/design.md",
+              f"mcuboot maps under bootloader/ in the clone layout (got {mb.repo}:{mb.file_path})")
 
         kc = by_anchor["cmdoption-config-foo"]
         check(kc.repo == "kconfig" and kc.file_path == "kconfig/index.html",

@@ -155,10 +155,13 @@ if ($SkipIndex) {
 Push-Location $RepoRoot
 try {
     Invoke-Checked 'build_index.py --format html (~45 min; first run caches the model)' {
+        # --source-root is the west clone the HTML was built from (commit-exact
+        # NCS v1.6.1): citations map each rendered page back to its source there,
+        # and get_doc serves it. No committed snapshot involved.
         uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py `
             --format html `
             --docs (ConvertTo-DockerPath $htmlRoot) `
-            --source-root ncs-1.6.1-docs `
+            --source-root (ConvertTo-DockerPath $srcDir) `
             --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
     }
 } finally {

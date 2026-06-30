@@ -14,17 +14,19 @@ table. Two ingest front-ends share one embed/write/meta tail:
 
 * ``--format html`` — the *resolved* Sphinx HTML build (real API signatures from
   breathe). ``--docs`` is the ``_build/html`` tree; ``--source-root`` is the
-  committed snapshot, used both to map each rendered page back to its source
-  ``.rst`` (citations) and as the docs root the server serves. E.g.::
+  **west clone** the HTML was built from (a commit-exact NCS v1.6.1 workspace),
+  used both to map each rendered page back to its source ``.rst``/``.md``
+  (citations) and as the docs root the server serves. E.g.::
 
       uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
-          --format html --docs /c/ncs-docbuild/out/_build/html \\
-          --source-root ncs-1.6.1-docs --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
+          --format html --docs C:/ncs-docbuild/out/_build/html \\
+          --source-root C:/ncs-docbuild/src --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import posixpath
 import re
 import sqlite3
@@ -45,12 +47,15 @@ SKIP_DIR_PARTS = {"_build", "_doxygen", ".git", "__pycache__"}
 SKIP_HTML_DIR_PARTS = {"_static", "_sources", "_images", "_downloads", "__pycache__"}
 SKIP_HTML_NAMES = {"genindex.html", "search.html", "py-modindex.html", "objects.inv"}
 
-# Docsets whose rendered pages map back to a folder in the source snapshot.
-# Generated (``kconfig``) and module-sourced (``nrfx`` ← modules/hal/nordic)
-# docsets have no snapshot ``.rst`` and cite their rendered page instead.
-DOCSET_TO_SNAPSHOT_TOP = {
-    "nrf": "nrf", "zephyr": "zephyr", "nrfxlib": "nrfxlib", "mcuboot": "mcuboot",
+# Maps an HTML docset to the top-level folder of its source repo in the west
+# clone. mcuboot lives under ``bootloader/`` in the NCS west workspace. Generated
+# (``kconfig``) and module-sourced (``nrfx`` ← modules/hal/nordic) docsets have no
+# mapped source and cite their rendered page instead.
+DOCSET_TO_SOURCE_TOP = {
+    "nrf": "nrf", "zephyr": "zephyr", "nrfxlib": "nrfxlib", "mcuboot": "bootloader",
 }
+# Dirs pruned while indexing source paths (the clone carries large .git/build trees).
+_SKIP_WALK_DIRS = {".git", "_build", "_doxygen", "build", "__pycache__"}
 
 SCHEMA = """
 CREATE TABLE sections(
@@ -199,27 +204,33 @@ def discover_html_files(html_root: Path) -> list[tuple[Path, str, str]]:
     return out
 
 
-class SnapshotIndex:
-    """Maps a rendered docname back to its source ``.rst`` in the snapshot.
+class SourceIndex:
+    """Maps a rendered docname back to its source file in the west clone.
 
-    The rendered output path *is* the Sphinx docname, but the snapshot stores
-    files at their full repo path (``nrf/doc/nrf/foo.rst``), so we suffix-match
-    the docset-relative tail against the snapshot — constrained to the docset's
-    top folder so same-named pages in other docsets can't collide."""
+    The rendered output path *is* the Sphinx docname, but the clone stores files
+    at their full repo path (``nrf/doc/nrf/foo.rst``, ``bootloader/mcuboot/docs/
+    foo.md``), so we suffix-match the docset-relative tail against the clone —
+    constrained to the docset's top folder so same-named pages in other docsets
+    can't collide. Only the mapped top folders are walked (``.git``/build dirs
+    pruned), so indexing a multi-GB clone stays cheap."""
 
-    def __init__(self, source_root: Path):
+    def __init__(self, source_root: Path, tops):
         self.root = source_root
         self.by_top: dict[str, list[tuple[str, str]]] = {}  # top -> [(nosuffix, rel)]
         self._lines: dict[str, list[str]] = {}
-        for path in sorted(source_root.rglob("*")):
-            if path.suffix.lower() not in (".rst", ".md"):
+        for top in sorted({t for t in tops if t}):
+            top_dir = source_root / top
+            if not top_dir.is_dir():
                 continue
-            rel = path.relative_to(source_root).as_posix()
-            top = rel.split("/", 1)[0]
-            self.by_top.setdefault(top, []).append((rel.rsplit(".", 1)[0], rel))
+            for dirpath, dirnames, filenames in os.walk(top_dir):
+                dirnames[:] = [d for d in dirnames if d not in _SKIP_WALK_DIRS]
+                for fn in filenames:
+                    if fn.lower().endswith((".rst", ".md")):
+                        rel = (Path(dirpath) / fn).relative_to(source_root).as_posix()
+                        self.by_top.setdefault(top, []).append((rel.rsplit(".", 1)[0], rel))
 
     def match(self, docset: str, page_docname: str) -> str | None:
-        top = DOCSET_TO_SNAPSHOT_TOP.get(docset)
+        top = DOCSET_TO_SOURCE_TOP.get(docset)
         if not top or top not in self.by_top:
             return None
         tail = page_docname.split("/", 1)[1] if "/" in page_docname else page_docname
@@ -277,21 +288,20 @@ def ingest_html(html_root: Path, source_root: Path) -> tuple[list[Section], list
     """Chunk the resolved HTML, map citations to source, resolve xrefs."""
     files = discover_html_files(html_root)
     print(f"[1/6] discovered {len(files)} HTML pages under {html_root}")
-    snap = SnapshotIndex(source_root)
+    src = SourceIndex(source_root, DOCSET_TO_SOURCE_TOP.values())
 
     sections: list[Section] = []
     mapped_files = 0
     for path, docset, page_docname in files:
         html = path.read_text(encoding="utf-8", errors="replace")
         secs = chunk_html_file(html, docset, page_docname)
-        src_rel = snap.match(docset, page_docname)
+        src_rel = src.match(docset, page_docname)
         if src_rel:
             mapped_files += 1
-            repo = src_rel.split("/", 1)[0]
             for s in secs:
-                s.repo = repo
-                s.file_path = src_rel
-                s.line_start = s.line_end = snap.anchor_line(src_rel, s.anchor)
+                s.repo = docset  # clean label (nrf/zephyr/nrfxlib/mcuboot)
+                s.file_path = src_rel  # clone-relative source path
+                s.line_start = s.line_end = src.anchor_line(src_rel, s.anchor)
         sections.extend(secs)
     for i, sec in enumerate(sections, start=1):
         sec.id = i  # type: ignore[attr-defined]
@@ -327,8 +337,8 @@ def main() -> int:
     ap.add_argument("--format", choices=("rst", "html"), default="rst",
                     help="source format: rst snapshot (default) or resolved Sphinx html")
     ap.add_argument("--source-root", type=Path, default=None,
-                    help="snapshot used for html citation mapping + as the served docs root "
-                         "(required with --format html)")
+                    help="west clone the html was built from: used for html citation "
+                         "mapping + as the served docs root (required with --format html)")
     ap.add_argument("--threads", type=int, default=None, help="ONNX threads")
     args = ap.parse_args()
 
@@ -345,7 +355,7 @@ def main() -> int:
         if not source_root.is_dir():
             ap.error(f"source root not found: {source_root}")
         sections, link_rows, embed_texts = ingest_html(docs_root, source_root)
-        meta_root = source_root  # get_doc serves source RST for provenance
+        meta_root = source_root  # the west clone; get_doc serves its source files
     else:
         sections, link_rows, embed_texts = ingest_rst(docs_root)
         meta_root = docs_root
@@ -393,22 +403,30 @@ def main() -> int:
         link_rows,
     )
 
-    docs_root_rel = posixpath.relpath(meta_root.as_posix(), out_path.parent.as_posix())
+    if args.format == "html":
+        # The source root is the external west clone; store its ABSOLUTE path so
+        # get_doc resolves into the live checkout (a relative path would escape the
+        # repo as ../../…). store.open_corpus does index.parent / value, which
+        # yields the absolute path unchanged.
+        docs_root_value = meta_root.as_posix()
+    else:
+        docs_root_value = posixpath.relpath(meta_root.as_posix(), out_path.parent.as_posix())
     meta = {
         "schema_version": str(SCHEMA_VERSION),
         "embed_model": EMBED_MODEL,
         "embed_dim": str(EMBED_DIM),
-        "docs_root_relative": docs_root_rel,
+        "docs_root_relative": docs_root_value,
         "section_count": str(len(sections)),
         "link_count": str(len(link_rows)),
         "source_format": args.format,
     }
     if args.format == "html":
         meta["build_note"] = (
-            "Resolved Sphinx HTML built from the NCS v1.6.1 manifest pins (fresh "
-            "west clone); citations map each rendered page back to the source .rst "
-            "in docs_root_relative. kconfig/nrfx have no snapshot source and cite "
-            "their rendered page."
+            "Resolved Sphinx HTML built from a fresh commit-exact NCS v1.6.1 west "
+            "clone; citations map each rendered page back to its source .rst/.md in "
+            "that clone (docs_root_relative holds the clone's absolute path). mcuboot "
+            "lives under bootloader/; kconfig/nrfx have no mapped source and cite the "
+            "rendered page."
         )
     write_meta(db, meta)
 

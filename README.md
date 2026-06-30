@@ -17,8 +17,7 @@ by meaning — with citations back to the real source.
 | Path | What it is |
 |---|---|
 | **`sdk-docs-mcp/`** | The corpus-neutral hybrid MCP documentation engine — see below. Ships the prebuilt `nrf-bm.sqlite`; the NCS 1.6.1 indexes (resolved-HTML, and a unified source-code + RST KB) are built locally per the runbooks. |
-| `ncs-1.6.1-docs/` | Frozen ~125 MB Sphinx doc snapshot of NCS **v1.6.1** (`zephyr/ nrf/ mcuboot/ nrfxlib/ tfm/`), pinned by commit in `MANIFEST.md`. |
-| `docker/` | Pinned toolchain image + west-clone build script that render the snapshot into **resolved HTML** (real API reference), the input to `ncs-1.6.1-resolved.sqlite`. See `docs/build-ncs-1.6.1-doc.md`. |
+| `docker/` | Pinned toolchain image + build script that **`west`-clones NCS v1.6.1** (commit-exact) and renders it to **resolved HTML** (real API reference). That clone is the single source of truth — HTML input, citation target, and what `get_doc` serves — so no doc snapshot is committed. See `docs/build-ncs-1.6.1-doc.md`. |
 | `sdk-nrf-bm/` | Local clone of `sdk-nrf-bm` (Bare Metal SDK) — the offline source of truth for headers, Kconfig, and samples, *and* the corpus behind the `bm-docs` server. Pinned + refreshable. |
 | `docs/` | The current resolved-HTML build runbook (`build-ncs-1.6.1-doc.md`); plus the historical design rationale (`ideas/docs-access-recommendation.md`) and original RST build runbook (`ncs-docs-mcp-build-guide.md`). |
 | `.mcp.json` | Wires up `ncs-docs-resolved` and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
