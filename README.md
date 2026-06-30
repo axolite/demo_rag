@@ -20,7 +20,7 @@ by meaning — with citations back to the real source.
 | `docker/` | Pinned toolchain image + build script that **`west`-clones NCS v1.6.1** (commit-exact) and renders it to **resolved HTML** (real API reference). That clone is the single source of truth — HTML input, citation target, and what `get_doc` serves — so no doc snapshot is committed. See `docs/build-ncs-1.6.1-doc.md`. |
 | `sdk-nrf-bm/` | Local clone of `sdk-nrf-bm` (Bare Metal SDK) — the offline source of truth for headers, Kconfig, and samples, *and* the corpus behind the `bm-docs` server. Pinned + refreshable. |
 | `docs/` | The current resolved-HTML build runbook (`build-ncs-1.6.1-doc.md`); plus the historical design rationale (`ideas/docs-access-recommendation.md`) and original RST build runbook (`ncs-docs-mcp-build-guide.md`). |
-| `.mcp.json` | Wires up `ncs-docs-resolved` and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
+| `.mcp.json` | Wires up the federated `ncs-docs` (resolved-HTML + unified source/RST) and `bm-docs`, plus `deepwiki`, `mdn`, and `chrome-devtools`. |
 | `sdk-nrf-bm.md` / `refresh-sdk-nrf-bm.sh` | Where to look in the Bare Metal clone, and how to refresh it. |
 
 ---
@@ -48,25 +48,26 @@ best of grep-the-source and semantic search.
 
 **By the numbers:** sdk-nrf-bm — 195 files → 1,160 sections → 1,006 edges (430
 resolved) → an 8 MB `nrf-bm.sqlite`. (The standalone NCS 1.6.1 RST index has been
-**retired**; its corpus is being rebuilt into the unified KB below.)
+**retired**; its corpus is folded into the unified source+RST KB below.)
 
 **Two NCS knowledge bases, one search surface.** The NCS 1.6.1 RST snapshot is strong
 on prose but ~18% of its files are doxygen *stub* pages — the real API reference
 (function signatures, struct fields) is injected only by a Sphinx + breathe build. So
-the NCS docs are moving to **two knowledge bases behind one federated search**: a
-**resolved-HTML** index (`ncs-1.6.1-resolved.sqlite`, served as `ncs-docs-resolved`;
-the *pretty* rendered docs) — a one-time Docker build documented in
-`docs/build-ncs-1.6.1-doc.md` — and a **unified source-code + RST** index so answers
-can be justified directly from the real C/Kconfig source. The retired RST-only index
-is subsumed by the latter.
+the NCS docs are served as **two knowledge bases behind one federated `ncs-docs`
+server**: a **resolved-HTML** index (`ncs-1.6.1-resolved.sqlite`; the *pretty* rendered
+docs) — a one-time Docker build documented in `docs/build-ncs-1.6.1-doc.md` — and a
+**unified source-code + RST** index (`ncs-1.6.1-source.sqlite`) so answers can be
+justified directly from the real C/Kconfig source. One query fuses both, each hit
+labelled by `source_kind ∈ {html, rst, code}`; the retired RST-only index is subsumed
+by the latter.
 
 ### Tools it exposes
 
 | Tool | Purpose |
 |---|---|
-| `search_docs(query, k=8, mode=hybrid\|keyword\|semantic)` | Find sections; returns repo, file, anchor, breadcrumb, line range, citation, snippet. Append `*` in `keyword` mode for symbol-family search (`CONFIG_BT*`). |
-| `get_section(id)` | Full text of one section. |
-| `get_doc(path)` | Full documentation file by repo-relative path (read fresh from disk). |
+| `search_docs(query, k=8, mode=hybrid\|keyword\|semantic, source=None)` | Find sections; returns `corpus`, `source_kind`, repo, file, anchor, breadcrumb, line range, citation, snippet. Append `*` in `keyword` mode for symbol-family search (`CONFIG_BT*`); `source=["code"]` / `["rst","html"]` filters by origin. |
+| `get_section(id)` | Full text of one section (`id` is a bare int, or `"corpus:local"` when federated). |
+| `get_doc(path, corpus=None)` | Full doc/source file by root-relative path (read fresh from the west clone). |
 | `related(id)` | Resolved xref neighbours (outgoing + incoming) plus unresolved edges. |
 
 ---
@@ -75,14 +76,17 @@ is subsumed by the latter.
 
 The servers are registered in `.mcp.json`, so once you open this repo in Claude Code
 and reload MCP servers, the four tools of `bm-docs` are available (its index is
-committed). The NCS 1.6.1 servers (`ncs-docs-resolved`, and the unified source+RST KB)
-come online once their indexes are built locally per the runbooks.
+committed). The federated `ncs-docs` comes online once its indexes are built locally
+per the runbook — and degrades gracefully: it serves resolved-HTML alone until the
+heavy source index exists (a missing index is skipped with a warning, not fatal).
 
 To run a server or rebuild an index from the command line:
 
 ```bash
-# Run a server (what .mcp.json does) — one index per instance
+# Run a server (what .mcp.json does) — pass one OR MORE indexes to federate
 uv run --project sdk-docs-mcp sdk-docs-mcp sdk-docs-mcp/nrf-bm.sqlite      # bm-docs
+uv run --project sdk-docs-mcp sdk-docs-mcp \
+    sdk-docs-mcp/ncs-1.6.1-resolved.sqlite sdk-docs-mcp/ncs-1.6.1-source.sqlite  # ncs-docs
 
 # Rebuild an index from its corpus (--docs and --out are required; first run
 # downloads the ~640 MB embedding model once, then it's cached)
@@ -90,14 +94,14 @@ uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
     --docs sdk-nrf-bm --out sdk-docs-mcp/nrf-bm.sqlite
 ```
 
-The NCS 1.6.1 indexes are produced by their own builds — the resolved-HTML index per
-`docs/build-ncs-1.6.1-doc.md`, and the unified source-code + RST index via the
-`--format`/`--code-root` path on `build_index.py`.
+The NCS 1.6.1 indexes are produced by their own builds — the resolved-HTML index and
+the unified source-code + RST index (`--format source`), both per
+`docs/build-ncs-1.6.1-doc.md`.
 
-Each index is **reproducible, not magic** — `build_index.py` walks one `--docs` root,
-chunks each RST/MD file into sections, extracts the xref graph, embeds each section, and
-writes everything into the `--out` SQLite file. Because each corpus is frozen, this is a
-one-time cost with no staleness or re-indexing machinery.
+Each index is **reproducible, not magic** — `build_index.py` chunks each source file
+into sections (RST/MD by section, code by symbol), extracts the xref graph, embeds each
+section, and writes everything into the `--out` SQLite file. Because each corpus is
+frozen, this is a one-time cost with no staleness or re-indexing machinery.
 
 > The server opens the index read-only and resolves the docs root from a path stored in
 > the index's `meta` table, so it works from any clone.

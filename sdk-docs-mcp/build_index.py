@@ -21,6 +21,16 @@ table. Two ingest front-ends share one embed/write/meta tail:
       uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
           --format html --docs C:/ncs-docbuild/out/_build/html \\
           --source-root C:/ncs-docbuild/src --out sdk-docs-mcp/ncs-1.6.1-resolved.sqlite
+
+* ``--format source`` — the unified **source-truth** index: RST docs *and*
+  symbol-chunked C/Kconfig/dts/… code, both ingested from the **one** west clone
+  (``--docs`` and ``--code-root`` are the same clone) into a single sqlite with a
+  ``source_kind`` in {rst, code} column. Federated alongside the resolved-HTML
+  index by one server. E.g.::
+
+      uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \\
+          --format source --docs C:/ncs-docbuild/src --code-root C:/ncs-docbuild/src \\
+          --out sdk-docs-mcp/ncs-1.6.1-source.sqlite
 """
 
 from __future__ import annotations
@@ -39,6 +49,10 @@ import sqlite_vec
 sys.path.insert(0, str(Path(__file__).parent))
 from sdk_docs_mcp import EMBED_DIM, EMBED_MODEL, SCHEMA_VERSION  # noqa: E402
 from sdk_docs_mcp.chunker import Section, chunk_file, clean_for_embedding, extract_links  # noqa: E402
+from sdk_docs_mcp.code_chunker import (  # noqa: E402
+    CODE_SCOPE_DIRS, SKIP_CODE_DIR_PARTS, chunk_code_file_safe, chunk_file_whole,
+    clean_code_for_embedding, discover_code_files,
+)
 from sdk_docs_mcp.html_chunker import chunk_html_file  # noqa: E402
 from sdk_docs_mcp.store import write_meta  # noqa: E402
 
@@ -67,8 +81,11 @@ CREATE TABLE sections(
     header TEXT,
     line_start INTEGER,
     line_end INTEGER,
-    text TEXT
+    text TEXT,
+    source_kind TEXT NOT NULL DEFAULT 'rst'   -- rst | html | code (v2)
 );
+-- Lets the server's ``source=[...]`` filter restrict candidates cheaply.
+CREATE INDEX idx_sections_kind ON sections(source_kind);
 
 -- BM25 keyword search. tokenchars '_' keeps CONFIG_BOOTLOADER_MCUBOOT atomic.
 -- External content (content='sections') avoids duplicating the text column.
@@ -103,7 +120,10 @@ CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
 
 
 def discover_files(docs_root: Path) -> list[tuple[Path, str, str]]:
-    """Return (abs_path, repo, posix_rel_path) for every .rst/.md doc."""
+    """Return (abs_path, repo, posix_rel_path) for every .rst/.md doc.
+
+    Whole-tree walk with ``repo = rel.parts[0]`` — the standalone-snapshot
+    contract (``--format rst``), unchanged."""
     out: list[tuple[Path, str, str]] = []
     for path in sorted(docs_root.rglob("*")):
         if path.suffix.lower() not in (".rst", ".md"):
@@ -113,6 +133,32 @@ def discover_files(docs_root: Path) -> list[tuple[Path, str, str]]:
             continue
         repo = rel.parts[0]
         out.append((path, repo, rel.as_posix()))
+    return out
+
+
+def discover_files_scoped(
+    docs_root: Path, scope: list[tuple[str, str]], include_tests: bool = True
+) -> list[tuple[Path, str, str]]:
+    """Like ``discover_files`` but restricted to in-scope repo trees of the west
+    clone (``--format source``), with the **mapped repo label** rather than the
+    path's first component — so ``bootloader/mcuboot/...`` is labelled ``mcuboot``
+    and the excluded third-party modules are never visited. ``file_path`` stays
+    clone-relative so ``get_doc`` resolves it straight into the checkout."""
+    out: list[tuple[Path, str, str]] = []
+    for sub, label in scope:
+        base = docs_root / sub
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_CODE_DIR_PARTS]
+            if not include_tests:
+                dirnames[:] = [d for d in dirnames if d != "tests"]
+            for fn in sorted(filenames):
+                if not fn.lower().endswith((".rst", ".md")):
+                    continue
+                abs_path = Path(dirpath) / fn
+                rel = abs_path.relative_to(docs_root).as_posix()
+                out.append((abs_path, label, rel))
     return out
 
 
@@ -147,9 +193,18 @@ def resolve_doc(target: str, src_path: str, doc_map: dict[str, int]) -> int | No
     return hits[0] if len(hits) == 1 else None
 
 
-def ingest_rst(docs_root: Path) -> tuple[list[Section], list[tuple], list[str]]:
-    """Chunk + cross-reference the RST snapshot. Returns (sections, link_rows, embed_texts)."""
-    files = discover_files(docs_root)
+def ingest_rst(
+    docs_root: Path,
+    scope: list[tuple[str, str]] | None = None,
+    include_tests: bool = True,
+) -> tuple[list[Section], list[tuple], list[str]]:
+    """Chunk + cross-reference RST/MD. Returns (sections, link_rows, embed_texts).
+
+    ``scope=None`` is the standalone snapshot contract (whole-tree, repo =
+    first path component). A ``scope`` (used by ``--format source``) restricts
+    the walk to the west clone's in-scope repo trees with mapped labels."""
+    files = (discover_files(docs_root) if scope is None
+             else discover_files_scoped(docs_root, scope, include_tests))
     print(f"[1/6] discovered {len(files)} doc files under {docs_root}")
 
     sections: list[Section] = []
@@ -157,6 +212,7 @@ def ingest_rst(docs_root: Path) -> tuple[list[Section], list[tuple], list[str]]:
         sections.extend(chunk_file(path, repo, rel))
     for i, sec in enumerate(sections, start=1):
         sec.id = i  # type: ignore[attr-defined]
+        sec.source_kind = "rst"  # type: ignore[attr-defined]
     print(f"[2/6] chunked into {len(sections)} sections")
 
     anchor_map: dict[str, int] = {}
@@ -305,6 +361,7 @@ def ingest_html(html_root: Path, source_root: Path) -> tuple[list[Section], list
         sections.extend(secs)
     for i, sec in enumerate(sections, start=1):
         sec.id = i  # type: ignore[attr-defined]
+        sec.source_kind = "html"  # type: ignore[attr-defined]
     print(f"[2/6] chunked into {len(sections)} sections "
           f"({mapped_files}/{len(files)} pages mapped to source .rst)")
 
@@ -323,6 +380,83 @@ def ingest_html(html_root: Path, source_root: Path) -> tuple[list[Section], list
 
 
 # --------------------------------------------------------------------------- #
+# Code ingest (C/H, Kconfig, dts/cmake/yaml/… from the west clone)
+# --------------------------------------------------------------------------- #
+
+
+def ingest_code(
+    code_root: Path,
+    scope: list[tuple[str, str]],
+    include_tests: bool = True,
+    granularity: str = "symbol",
+) -> tuple[list[Section], list[tuple], list[str]]:
+    """Symbol-chunk the in-scope source trees. Same triple as the others.
+
+    Emits **no** link rows in v1 (the ``#include`` graph is different semantics
+    from the Sphinx xref graph; symbol anchors + RRF already let the agent
+    pivot). Each section is tagged ``source_kind="code"``."""
+    files = discover_code_files(code_root, scope, include_tests)
+    print(f"[1/6] discovered {len(files)} code files under {code_root}")
+
+    sections: list[Section] = []
+    fell_back = 0
+    for abs_path, repo, rel, lang in files:
+        try:
+            text = abs_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if granularity == "file":
+            secs = chunk_file_whole(text, repo, rel)
+        else:
+            secs, fb = chunk_code_file_safe(text, repo, rel, lang)
+            fell_back += fb
+        for sec in secs:
+            sec.source_kind = "code"  # type: ignore[attr-defined]
+        sections.extend(secs)
+    for i, sec in enumerate(sections, start=1):
+        sec.id = i  # type: ignore[attr-defined]
+    fb_note = f"; {fell_back} files fell back to line windows" if fell_back else ""
+    print(f"[2/6] chunked into {len(sections)} code sections{fb_note}")
+    print("[3/6] code emits no xref edges in v1")
+
+    embed_texts = [clean_code_for_embedding(sec.text) for sec in sections]
+    return sections, [], embed_texts
+
+
+def ingest_source(
+    clone_root: Path,
+    scope: list[tuple[str, str]],
+    include_tests: bool = True,
+    granularity: str = "symbol",
+) -> tuple[list[Section], list[tuple], list[str]]:
+    """KB2: merge RST + code from the **one** west clone into a single index.
+
+    Runs both ingests (each assigning ids ``1..N`` and resolving its own links),
+    then offsets the code ids past the RST block so the merged id space is
+    contiguous. Code link rows are re-offset too — a no-op in v1 (code emits
+    none) but future-proof."""
+    print(f"=== ingest_source: RST + code from {clone_root} ===")
+    rst_secs, rst_links, rst_embed = ingest_rst(clone_root, scope, include_tests)
+    code_secs, code_links, code_embed = ingest_code(
+        clone_root, scope, include_tests, granularity)
+
+    offset = len(rst_secs)
+    for sec in code_secs:
+        sec.id += offset  # type: ignore[attr-defined]
+    code_links = [(src + offset, kind, tgt,
+                   (res + offset if res is not None else None))
+                  for (src, kind, tgt, res) in code_links]
+
+    sections = rst_secs + code_secs
+    link_rows = rst_links + code_links
+    embed_texts = rst_embed + code_embed
+    kinds = {"rst": len(rst_secs), "code": len(code_secs)}
+    print(f"[merge] {len(sections)} sections total (rst={kinds['rst']}, "
+          f"code={kinds['code']}), code ids offset by {offset}")
+    return sections, link_rows, embed_texts
+
+
+# --------------------------------------------------------------------------- #
 # Shared tail: embed -> write -> meta
 # --------------------------------------------------------------------------- #
 
@@ -334,11 +468,20 @@ def main() -> int:
                     help="root to index: an RST snapshot, or a _build/html tree for --format html")
     ap.add_argument("--out", type=Path, required=True,
                     help="output SQLite path (e.g. sdk-docs-mcp/ncs-1.6.1-resolved.sqlite)")
-    ap.add_argument("--format", choices=("rst", "html"), default="rst",
-                    help="source format: rst snapshot (default) or resolved Sphinx html")
+    ap.add_argument("--format", choices=("rst", "html", "source"), default="rst",
+                    help="rst snapshot (default), resolved Sphinx html, or the merged "
+                         "rst+code source index (--format source)")
     ap.add_argument("--source-root", type=Path, default=None,
                     help="west clone the html was built from: used for html citation "
                          "mapping + as the served docs root (required with --format html)")
+    ap.add_argument("--code-root", type=Path, default=None,
+                    help="west clone to ingest source code from (--format source); "
+                         "defaults to --docs (the same clone serves RST + code)")
+    ap.add_argument("--no-tests", action="store_true",
+                    help="--format source: drop */tests/* trees (~-21%% of C/H)")
+    ap.add_argument("--code-granularity", choices=("symbol", "file"), default="symbol",
+                    help="--format source: per-symbol chunks (default) or one chunk "
+                         "per file (file = fast first pass, ~3-5x fewer chunks)")
     ap.add_argument("--threads", type=int, default=None, help="ONNX threads")
     args = ap.parse_args()
 
@@ -347,6 +490,7 @@ def main() -> int:
     if not docs_root.is_dir():
         ap.error(f"docs root not found: {docs_root}")
 
+    include_tests = not args.no_tests
     t0 = time.time()
     if args.format == "html":
         if args.source_root is None:
@@ -356,6 +500,16 @@ def main() -> int:
             ap.error(f"source root not found: {source_root}")
         sections, link_rows, embed_texts = ingest_html(docs_root, source_root)
         meta_root = source_root  # the west clone; get_doc serves its source files
+    elif args.format == "source":
+        # --docs and --code-root are the same west clone: ingest_rst walks its
+        # doc trees, ingest_code its source. Both stay clone-relative so get_doc
+        # resolves rst + code alike against the one root.
+        code_root = (args.code_root or args.docs).resolve()
+        if not code_root.is_dir():
+            ap.error(f"code root not found: {code_root}")
+        sections, link_rows, embed_texts = ingest_source(
+            code_root, CODE_SCOPE_DIRS, include_tests, args.code_granularity)
+        meta_root = code_root  # the west clone; get_doc serves rst + code from it
     else:
         sections, link_rows, embed_texts = ingest_rst(docs_root)
         meta_root = docs_root
@@ -386,9 +540,10 @@ def main() -> int:
 
     db.executemany(
         "INSERT INTO sections(id, repo, file_path, anchor, breadcrumb, header, "
-        "line_start, line_end, text) VALUES (?,?,?,?,?,?,?,?,?)",
+        "line_start, line_end, text, source_kind) VALUES (?,?,?,?,?,?,?,?,?,?)",
         [(s.id, s.repo, s.file_path, s.anchor, s.breadcrumb, s.header,  # type: ignore[attr-defined]
-          s.line_start, s.line_end, s.text) for s in sections],
+          s.line_start, s.line_end, s.text, getattr(s, "source_kind", "rst"))
+         for s in sections],
     )
     db.executemany(
         "INSERT INTO fts_sections(rowid, text, header, anchor) VALUES (?,?,?,?)",
@@ -403,11 +558,11 @@ def main() -> int:
         link_rows,
     )
 
-    if args.format == "html":
-        # The source root is the external west clone; store its ABSOLUTE path so
-        # get_doc resolves into the live checkout (a relative path would escape the
-        # repo as ../../…). store.open_corpus does index.parent / value, which
-        # yields the absolute path unchanged.
+    # html + source resolve get_doc against the external west clone, so store its
+    # ABSOLUTE path (a relative path would escape the repo as ../../…). The rst
+    # snapshot stays repo-portable with a relative path. store.open_corpus does
+    # index.parent / value, which yields an absolute path unchanged.
+    if args.format in ("html", "source"):
         docs_root_value = meta_root.as_posix()
     else:
         docs_root_value = posixpath.relpath(meta_root.as_posix(), out_path.parent.as_posix())
@@ -427,6 +582,21 @@ def main() -> int:
             "that clone (docs_root_relative holds the clone's absolute path). mcuboot "
             "lives under bootloader/; kconfig/nrfx have no mapped source and cite the "
             "rendered page."
+        )
+    elif args.format == "source":
+        kind_counts: dict[str, int] = {}
+        for s in sections:
+            k = getattr(s, "source_kind", "rst")
+            kind_counts[k] = kind_counts.get(k, 0) + 1
+        meta["code_scope"] = ",".join(f"{d}:{lbl}" for d, lbl in CODE_SCOPE_DIRS)
+        meta["source_kinds"] = ",".join(f"{k}:{v}" for k, v in sorted(kind_counts.items()))
+        meta["build_note"] = (
+            "Unified source-truth index: RST docs + symbol-chunked C/Kconfig/dts/… "
+            "code, both from one fresh commit-exact NCS v1.6.1 west clone "
+            "(west manifest rev v1.6.1; resolved shas nrf 651d785, zephyr a62ea8f, "
+            "nrfxlib c5efbc8, mcuboot 02afea3). docs_root_relative holds the clone's "
+            "absolute path; get_doc serves rst + code from it. "
+            f"granularity={args.code_granularity}, include_tests={include_tests}."
         )
     write_meta(db, meta)
 

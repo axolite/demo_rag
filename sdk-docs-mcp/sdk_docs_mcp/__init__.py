@@ -12,4 +12,6 @@ merged at query time with Reciprocal Rank Fusion.
 
 EMBED_MODEL = "jinaai/jina-embeddings-v2-base-code"
 EMBED_DIM = 768
-SCHEMA_VERSION = 1
+# v2 adds the ``source_kind`` column (rst | html | code) to ``sections``. v1
+# indexes (no column) still open via a PRAGMA probe in ``store.open_corpus``.
+SCHEMA_VERSION = 2

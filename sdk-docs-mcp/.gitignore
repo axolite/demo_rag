@@ -3,3 +3,8 @@
 __pycache__/
 *.pyc
 *.egg-info/
+
+# The unified source-truth index (~0.8–1.1 GB) is built locally, not committed:
+# it's large and resolves get_doc against the machine-local west clone, so a
+# committed copy wouldn't be portable anyway. Rebuild it per the runbook.
+ncs-1.6.1-source.sqlite

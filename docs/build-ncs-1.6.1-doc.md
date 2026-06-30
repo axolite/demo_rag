@@ -15,11 +15,12 @@ unresolved label strings until built.
 
 This runbook builds the documentation the way Nordic builds it — with the real
 2021 Sphinx toolchain, from a **fresh commit-exact `west` clone** of NCS v1.6.1 —
-and ingests that **resolved HTML** into `ncs-1.6.1-resolved.sqlite` (served as
-`ncs-docs-resolved`). It answers exact-API questions the RST stubs can't, while
-citations point back to the real source in that clone, preserving the
-pointer-first "go read the real source" model. The same clone is the **single
-source of truth**: it feeds the HTML build, the citation mapping, and `get_doc`.
+and ingests that **resolved HTML** into `ncs-1.6.1-resolved.sqlite` (KB1). It
+answers exact-API questions the RST stubs can't, while citations point back to the
+real source in that clone, preserving the pointer-first "go read the real source"
+model. The same clone is the **single source of truth**: it feeds the HTML build,
+the citation mapping, `get_doc`, *and* the unified RST+code index (KB2, Part D).
+Both indexes are federated behind one `ncs-docs` MCP entity (Part C).
 
 ## Outcome
 
@@ -28,8 +29,9 @@ source of truth**: it feeds the HTML build, the citation mapping, and `get_doc`.
 | `docker/ncs-1.6.1-docs.Dockerfile` | yes | pinned toolchain (doxygen 1.8.13, py3.8) |
 | `docker/build-docs.sh`, `docker/constraints.txt` | yes | west clone + build; two-phase lockfile |
 | resolved HTML (`_build/html/…`) | **no** | ~1–2 GB build artifact, host scratch only |
-| `sdk-docs-mcp/ncs-1.6.1-resolved.sqlite` | yes | ~70 MB, the deliverable index |
-| `ncs-docs-resolved` in `.mcp.json` | yes | second server instance |
+| `sdk-docs-mcp/ncs-1.6.1-resolved.sqlite` (KB1) | **no** | ~70 MB; built locally (cites the machine-local clone) |
+| `sdk-docs-mcp/ncs-1.6.1-source.sqlite` (KB2) | **no** | ~0.8–1.1 GB; built locally, gitignored (Part D) |
+| federated `ncs-docs` in `.mcp.json` | yes | one entity over KB1 + KB2 |
 
 ## Prerequisites
 
@@ -197,36 +199,112 @@ uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
 
 `--source-root` is the **west clone** (not a committed snapshot). The same
 embedding profile applies (length-cap + length-sorted batching, ~1 GB RAM,
-~45 min; the `embed.py` safeguards are in place). Expect a ~70 MB SQLite,
-committed (`*.sqlite` is `binary -diff` per `.gitattributes`). `build-resolved-docs.ps1`
-wires `--source-root` to the clone (`$srcDir`) automatically.
+~45 min; the `embed.py` safeguards are in place). Expect a ~70 MB SQLite. Like KB2
+it cites the machine-local clone, so it is **built locally, not committed**.
+`build-resolved-docs.ps1` wires `--source-root` to the clone (`$srcDir`) automatically.
 
 ---
 
-## Part C — Wire up the new MCP instance
+## Part C — Wire up the federated MCP instance
 
-Already in `.mcp.json` (the rst-only `ncs-docs` has been retired):
+`.mcp.json` registers **one** federated `ncs-docs` (the rst-only `ncs-docs` and the
+standalone `ncs-docs-resolved` are both retired/folded in):
 
 ```jsonc
-"ncs-docs-resolved": {
+"ncs-docs": {
   "command": "uv",
   "args": ["run", "--project", "sdk-docs-mcp", "sdk-docs-mcp",
-           "sdk-docs-mcp/ncs-1.6.1-resolved.sqlite"]
+           "sdk-docs-mcp/ncs-1.6.1-resolved.sqlite",
+           "sdk-docs-mcp/ncs-1.6.1-source.sqlite"]
 }
 ```
 
-No server code change — the four tools are corpus-neutral and read everything
-from the index + `meta`. Reload MCP servers in Claude Code after the index is in
-place.
+The server takes one *or more* index paths (`nargs="+"`) and fuses them. A
+**missing index is skipped with a warning**, so this entry works as resolved-only
+*before* KB2 (Part D) is built — no need to stage the `.mcp.json` change. Reload
+MCP servers in Claude Code after each index is in place.
+
+---
+
+## Part D — Build the unified source-truth index (KB2) + federate
+
+KB2 (`ncs-1.6.1-source.sqlite`) folds the NCS **RST docs** and the **source code**
+(C/H, Kconfig, devicetree, …) into one index, ingested from the **same west clone**
+Part A created. Together with KB1 (resolved HTML) it forms the two complementary
+knowledge bases behind the single `ncs-docs` entity: KB1 = the *rendered* API
+surface, KB2 = the prose **and** the real code it's drawn from.
+
+### D1. What the ingest does (`code_chunker.py` + `build_index.py --format source`)
+
+- **Symbol chunking** (`code_chunker.py`): a pure-regex brace matcher emits one
+  chunk per top-level C/C++ construct (function / struct / union / enum / typedef /
+  top-level `#define` / `*_DEFINE(...)` family) with the **symbol name as the
+  `anchor`**; Kconfig is chunked per `config`/`menuconfig` (`anchor=CONFIG_<NAME>`,
+  prompt string as the header); devicetree / CMake / yaml / linker / asm fall back
+  to overlapping line windows. No tree-sitter — the stack stays pure-Python (no
+  native Windows wheels), and a per-file `try/except` → line-window fallback means
+  a parser miss never aborts the ~7k-file build.
+- **Scope** is positive-listed (`CODE_SCOPE_DIRS`): `zephyr`, `nrf`, `nrfxlib`,
+  `bootloader/mcuboot`, `modules/hal/{nordic,cmsis,libmetal}` — with mapped repo
+  labels, so the big third-party forks (`modules/lib/{matter,openthread,…}`, the
+  STM32 HAL) are never walked. Guards skip binaries/images (nrfxlib's `.a` blobs),
+  files >1.5 MB, and NUL-byte (generated) files. The RST half is ingested from the
+  same clone, scoped to those repos' doc trees.
+- **Merge**: RST and code are chunked separately (each id-numbered `1..N`), then the
+  code ids are offset past the RST block into one contiguous id space, and both
+  carry a `source_kind ∈ {rst, code}` column. `meta.docs_root_relative` holds the
+  clone's absolute path, so `get_doc` serves rst *and* code from the one root.
+
+### D2. Build it
+
+```bash
+# Fast first pass — validate the whole pipeline (~1–1.5 h, ~200 MB):
+uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
+    --format source --docs /c/ncs-docbuild/src --code-root /c/ncs-docbuild/src \
+    --no-tests --code-granularity file --out sdk-docs-mcp/ncs-1.6.1-source.sqlite
+
+# Full production build — per-symbol anchors + samples + tests (~5–7 h, ~0.8–1.1 GB):
+uv run --project sdk-docs-mcp python -u sdk-docs-mcp/build_index.py \
+    --format source --docs /c/ncs-docbuild/src --code-root /c/ncs-docbuild/src \
+    --out sdk-docs-mcp/ncs-1.6.1-source.sqlite
+```
+
+`--docs` and `--code-root` are the **same** clone. Levers: `--code-granularity file`
+(≈3–5× fewer chunks, no symbol anchors) and `--no-tests` (~−21% of C/H). KB2 is
+~1 GB and resolves `get_doc` against the machine-local clone, so it is **gitignored
+and rebuilt locally**, never committed.
+
+### D3. Verify the federation
+
+On `ncs-docs` (both indexes present), reload MCP servers, then:
+
+1. **Dual-source recall:** `search_docs("legacy and extended advertising
+   simultaneously", k=10)` returns **both** a doc hit (`source_kind ∈ {html, rst}`)
+   **and** a code hit (`source_kind="code"`) from `zephyr/subsys/bluetooth`, each
+   labelled by its `corpus`.
+2. **Symbol search:** `search_docs("bt_le_ext_adv_create", mode="keyword")` → a code
+   chunk with `anchor == "bt_le_ext_adv_create"`.
+3. **CONFIG search:** `search_docs("CONFIG_BT_EXT_ADV", mode="keyword")` → a Kconfig
+   chunk (`anchor="CONFIG_BT_EXT_ADV"`) plus a doc hit.
+4. **Filter:** `source=["code"]` returns code only; `source=["rst","html"]` docs only.
+5. **`get_doc` into the clone:** `get_doc("zephyr/subsys/bluetooth/host/adv.c",
+   corpus="source")` returns real source from `C:\ncs-docbuild\src`.
+
+The chunker + `ingest_source` + federated-server logic is covered offline (no ONNX)
+by `sdk-docs-mcp/tests/test_code_chunker.py`:
+
+```bash
+uv run --project sdk-docs-mcp python sdk-docs-mcp/tests/test_code_chunker.py
+```
 
 ---
 
 ## Verification
 
-1. **API content present (the whole point).** On `ncs-docs-resolved`:
-   `search_docs("secure services API", mode=keyword)` returns a section whose
-   text includes real `spm_request_*` signatures (the raw stub `.rst` in the clone
-   has only the `.. doxygengroup::` directive).
+1. **API content present (the whole point).** On `ncs-docs` (filter
+   `source=["html"]` for KB1): `search_docs("secure services API", mode=keyword)`
+   returns a section whose text includes real `spm_request_*` signatures (the raw
+   stub `.rst` in the clone has only the `.. doxygengroup::` directive).
 2. **Doxygen-only symbol.** `search_docs("nrf_modem_init", mode=keyword)` hits a
    section carrying the real prototype.
 3. **Resolved xrefs.** `related(id)` on a resolved section yields concrete
@@ -264,6 +342,8 @@ uv run --project sdk-docs-mcp python sdk-docs-mcp/tests/test_html_chunker.py
 ## Effort & size
 
 - HTML build: ~30–90 min wall; `_build` ~1–2 GB (not committed).
-- Index build: ~45 min; `ncs-1.6.1-resolved.sqlite` ~70 MB (committed).
+- KB1 index build: ~45 min; `ncs-1.6.1-resolved.sqlite` ~70 MB (built locally).
+- KB2 index build: ~1–1.5 h (fast pass) to ~5–7 h (full); `ncs-1.6.1-source.sqlite`
+  ~0.2–1.1 GB (built locally, gitignored). See Part D.
 - New code: `html_chunker.py` + `build_index.py` ingest split + deps (~250 LOC),
   validated end-to-end on a synthetic Sphinx fixture before the real build.
